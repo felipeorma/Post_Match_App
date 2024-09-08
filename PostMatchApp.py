@@ -19,44 +19,43 @@ cxG = 1.53570624482222
 
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
-    lg_id_dict = {
-        'MLS': '130',  # Asegúrate de tener la ID correcta para la MLS
-        # Añade otras ligas aquí
-    }
+    
+    # Asegúrate de que lg_id_dict está definido en el mismo contexto
+    global lg_id_dict
+    
+    if lg not in lg_id_dict:
+        raise ValueError(f"League '{lg}' is not in the lg_id_dict.")
 
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.getText()))
-
+    
     if lg == 'MLS':
-        # Procesar el JSON específico para la MLS
         table = json_data['data']['table']  # Ajusta esto según la estructura real
         df = pd.json_normalize(table)
     else:
-        # Procesar JSON para otras ligas
         table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
         df = pd.json_normalize(table)
-
+    
     df = df.T
+    
     df_all = pd.DataFrame()
-
     for i in range(len(df)):
         for j in range(len(df.columns)):
             row = pd.DataFrame(pd.Series(df.iloc[i,j])).T
-            df_all = pd.concat([df_all, row])
-
+            df_all = pd.concat([df_all,row])
     df_all.reset_index(drop=True, inplace=True)
-
+    
     df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
     df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
     df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
     df_all['real_position'] = df_all['idx']
     df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
     df_all.reset_index(drop=True, inplace=True)
-    df_all['Goals per match'] = [df_all['goals'][i]/df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-    df_all['Goals against per match'] = [df_all['conceded_goals'][i]/df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-
+    df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+    df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+    
     tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
         'pts': 'Pts',
         'name': 'Team',
@@ -74,12 +73,14 @@ def get_fotmob_table_data(lg):
     tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
     logos = tables.logo.tolist()[::-1]
     tables = tables.iloc[:, :-1]
-
+    
     tables.rename(columns={'Pos': ' '}, inplace=True)
-
+    
     indexdf = tables[::-1].copy()
-
+    
     return indexdf, logos
+
+
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
     plt.clf()
