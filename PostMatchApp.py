@@ -37,20 +37,27 @@ def get_fotmob_table_data(lg):
         print(f"Error reading JSON data: {e}")
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
     
-    # Si quieres imprimir solo cuando se selecciona la MLS
+    # Manejar la estructura diferente de la MLS
     if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu `lg_lookup`
-        print(f"MLS JSON Structure: {json_data.to_dict()}")
-    
-    # Intentar acceder a la clave de manera segura
-    try:
-        if 'data' in json_data.columns:
-            table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', {}))
-        else:
-            print("The 'data' key is missing in the JSON structure.")
-            return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
-    except Exception as e:
-        print(f"Error accessing table data: {e}")
-        return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
+        try:
+            # Ajusta la extracción de acuerdo a la estructura específica de la MLS
+            # Supongamos que la estructura tiene las claves `['standings', 'team', 'stats']`
+            table = json_data['standings'].apply(lambda x: x.get('team', {})).apply(lambda x: x.get('stats', {}))
+            print(f"MLS specific structure extracted.")
+        except Exception as e:
+            print(f"Error processing MLS structure: {e}")
+            return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
+    else:
+        # Estructura general para otras ligas
+        try:
+            if 'data' in json_data.columns:
+                table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', {}))
+            else:
+                print("The 'data' key is missing in the JSON structure.")
+                return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
+        except Exception as e:
+            print(f"Error accessing table data: {e}")
+            return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
 
     # Transformación de los datos extraídos
     df = pd.json_normalize(table)
