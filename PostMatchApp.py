@@ -42,12 +42,12 @@ def get_fotmob_table_data(lg):
 
     # Intentar extraer la tabla de datos del JSON
     try:
-        # Verificar la estructura y extraer la tabla de datos
+        # Verificar si la clave 'data' existe y es una Serie de Pandas
         if 'data' in json_data and isinstance(json_data['data'], pd.Series):
-            # Acceso seguro a las claves 'table' y 'all' con manejo de errores
+            # Utilizar una extracción segura con .get para evitar KeyError
             table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
         else:
-            st.error("La estructura del JSON no contiene los datos esperados.")
+            st.error("La estructura del JSON no contiene los datos esperados o 'data' no es una Serie.")
             return pd.DataFrame(), []
 
         # Normalizar los datos extraídos en un DataFrame
@@ -65,40 +65,42 @@ def get_fotmob_table_data(lg):
         df_all.reset_index(drop=True, inplace=True)
 
         # Verificar si las columnas necesarias existen antes de procesarlas
-        if all(col in df_all for col in ['id', 'scoresStr', 'idx']):
-            df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
-            df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
-            df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
-            df_all['real_position'] = df_all['idx']
-            df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
-            df_all.reset_index(drop=True, inplace=True)
-            df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-            df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-
-            # Selección de columnas y renombramiento
-            tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
-                'pts': 'Pts',
-                'name': 'Team',
-                'real_position': 'Pos',
-                'goals': 'GF',
-                'conceded_goals': 'GA',
-                'played': 'M',
-                'wins': 'W',
-                'draws': 'D',
-                'losses': 'L',
-                'goalConDiff': 'GD'
-            })
-            tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
-            logos = tables.logo.tolist()[::-1]
-            tables = tables.iloc[:, :-1]
-
-            tables.rename(columns={'Pos': ' '}, inplace=True)
-
-            indexdf = tables[::-1].copy()
-            return indexdf, logos
-        else:
-            st.error("Las columnas necesarias no se encontraron en los datos.")
+        required_columns = ['id', 'scoresStr', 'idx', 'played']
+        missing_columns = [col for col in required_columns if col not in df_all]
+        if missing_columns:
+            st.error(f"Las siguientes columnas necesarias no se encontraron en los datos: {missing_columns}")
             return pd.DataFrame(), []
+
+        df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
+        df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
+        df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
+        df_all['real_position'] = df_all['idx']
+        df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
+        df_all.reset_index(drop=True, inplace=True)
+        df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+        df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+
+        # Selección de columnas y renombramiento
+        tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
+            'pts': 'Pts',
+            'name': 'Team',
+            'real_position': 'Pos',
+            'goals': 'GF',
+            'conceded_goals': 'GA',
+            'played': 'M',
+            'wins': 'W',
+            'draws': 'D',
+            'losses': 'L',
+            'goalConDiff': 'GD'
+        })
+        tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
+        logos = tables.logo.tolist()[::-1]
+        tables = tables.iloc[:, :-1]
+
+        tables.rename(columns={'Pos': ' '}, inplace=True)
+
+        indexdf = tables[::-1].copy()
+        return indexdf, logos
 
     except KeyError as e:
         st.error(f"Error al procesar los datos de la tabla: {e}")
