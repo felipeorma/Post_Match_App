@@ -13,6 +13,11 @@ from io import StringIO
 
 cxG = 1.53570624482222
 @st.cache_data(ttl=60*15)
+import requests
+import pandas as pd
+from bs4 import BeautifulSoup
+from io import StringIO
+
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
     
@@ -32,21 +37,31 @@ def get_fotmob_table_data(lg):
     soup = BeautifulSoup(page.content, "html.parser")
     try:
         json_data = pd.read_json(StringIO(soup.getText()))
-        print(f"Extracted JSON Data: {json_data}")  # Imprime todo el JSON para analizar la estructura
+        print(f"Extracted JSON Data: {json_data.head()}")  # Imprime una vista previa del JSON
     except ValueError as e:
         print(f"Error reading JSON data: {e}")
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
     
-    # Manejar la estructura diferente de la MLS
+    # Verificar la estructura del JSON
+    print(json_data.keys())  # Imprime las claves del DataFrame
+    if 'data' in json_data.columns:
+        print(json_data['data'].head())  # Imprime una vista previa de 'data'
+    else:
+        print("Key 'data' not found in JSON structure.")
+
+    # Manejo de la estructura diferente de la MLS
     if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu lg_lookup
         try:
-            # Verifica la existencia de la clave 'data' y 'tables'
+            # Imprime la estructura de 'data' si existe
             if 'data' in json_data.columns:
                 data = json_data['data'][0]  # Accede al primer elemento de 'data'
+                print(data.keys())  # Imprime las claves en 'data'
                 if 'tables' in data:
                     tables = data['tables']
+                    print(tables[0].keys())  # Imprime las claves en 'tables'
                     if len(tables) > 0 and 'table' in tables[0]:
                         table = tables[0]['table']
+                        print(table.keys())  # Imprime las claves en 'table'
                         if 'all' in table:
                             table_data = table['all']
                         else:
@@ -67,9 +82,11 @@ def get_fotmob_table_data(lg):
     else:
         # Estructura general para otras ligas
         try:
-            # Verifica la existencia de las claves 'data' y 'table.all'
+            # Imprime la estructura de 'data' para otras ligas
             if 'data' in json_data.columns:
-                table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', {}))
+                data = json_data['data']
+                print(data.head())  # Imprime una vista previa de 'data'
+                table = data.apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', {}))
             else:
                 print("The 'data' key is missing in the JSON structure.")
                 return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
@@ -125,6 +142,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
+
 
 
 
