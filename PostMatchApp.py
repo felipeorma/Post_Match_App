@@ -12,7 +12,6 @@ import numpy as np
 from io import StringIO
 
 cxG = 1.53570624482222
-
 @st.cache_data(ttl=60*15)
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
@@ -33,12 +32,16 @@ def get_fotmob_table_data(lg):
     soup = BeautifulSoup(page.content, "html.parser")
     try:
         json_data = pd.read_json(StringIO(soup.getText()))
-        print(f"Extracted JSON Data: {json_data.head()}")  # Verifica los primeros datos del JSON
+        print(f"Extracted JSON Data: {json_data}")  # Imprime todo el JSON para analizar la estructura
     except ValueError as e:
         print(f"Error reading JSON data: {e}")
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
     
-    # Verificar la estructura del JSON y manejar posibles variaciones
+    # Si quieres imprimir solo cuando se selecciona la MLS
+    if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu `lg_lookup`
+        print(f"MLS JSON Structure: {json_data.to_dict()}")
+    
+    # Intentar acceder a la clave de manera segura
     try:
         if 'data' in json_data.columns:
             table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', {}))
@@ -97,6 +100,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
+
 
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
