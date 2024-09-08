@@ -31,7 +31,7 @@ def get_fotmob_table_data(lg):
     # Inspeccionar el contenido de la respuesta
     soup = BeautifulSoup(page.content, "html.parser")
     try:
-        json_data = pd.read_json(StringIO(soup.getText()))
+        json_data = pd.read_json(StringIO(soup.get_text()))
         print(f"Extracted JSON Data: {json_data.head()}")  # Imprime una vista previa del JSON
     except ValueError as e:
         print(f"Error reading JSON data: {e}")
@@ -42,6 +42,7 @@ def get_fotmob_table_data(lg):
     if 'data' in json_data.columns:
         data = json_data['data']
         print(f"Data Keys: {data[0].keys()}")  # Imprime las claves del primer elemento en 'data'
+        
         if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu lg_lookup
             try:
                 table_data = []
@@ -81,11 +82,11 @@ def get_fotmob_table_data(lg):
         df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
         df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
         df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
-        df_all['real_position'] = df_all['idx']
+        df_all['real_position'] = df_all.index
         df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
         df_all.reset_index(drop=True, inplace=True)
-        df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-        df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+        df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all['played'][i] > 0 else 0 for i in range(len(df_all))]
+        df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all['played'][i] > 0 else 0 for i in range(len(df_all))]
     except Exception as e:
         print(f"Error processing table data: {e}")
         return pd.DataFrame(), []
@@ -95,8 +96,6 @@ def get_fotmob_table_data(lg):
         'pts': 'Pts',
         'name': 'Team',
         'real_position': 'Pos',
-        'xg': 'xG',
-        'xgConceded': 'xGA',
         'goals': 'GF',
         'conceded_goals': 'GA',
         'played': 'M',
@@ -113,6 +112,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
+    
 
 
 
