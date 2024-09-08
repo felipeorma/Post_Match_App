@@ -28,24 +28,21 @@ def get_fotmob_table_data(lg):
 
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
     page = requests.get(url)
-    
-    # Usar BeautifulSoup y pd.read_json para manejar la estructura de la respuesta
     soup = BeautifulSoup(page.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.getText()))
 
-    # Depuración para verificar la estructura del JSON
+    # Depuración: Imprimir la estructura del JSON
     print("JSON data structure:", json_data.head())
+    print("Full JSON data:", json_data.to_dict())
 
     # Manejo de la estructura del JSON dependiendo de la liga
     if lg == 'MLS':
-        # Ajusta la clave según la estructura real de los datos para MLS
         try:
             table = json_data['data']['table']
             df = pd.json_normalize(table)
         except KeyError:
             raise KeyError("Expected keys not found in JSON for MLS.")
     else:
-        # Manejo genérico para otras ligas
         try:
             tables_data = json_data['data']['tables']
             if isinstance(tables_data, list) and len(tables_data) > 0:
@@ -57,7 +54,7 @@ def get_fotmob_table_data(lg):
             raise KeyError("Expected keys not found in JSON for other leagues.")
 
     df = df.T
-    
+
     df_all = pd.DataFrame()
     for i in range(len(df)):
         for j in range(len(df.columns)):
@@ -97,6 +94,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
     
     return indexdf, logos
+    
 
 
 
