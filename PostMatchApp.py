@@ -44,11 +44,13 @@ def get_fotmob_table_data(lg):
         return pd.DataFrame(), []
 
     try:
-        # Verificar la estructura y extraer la tabla de datos de manera segura
+        # Asegurar que 'data' existe y es una Serie
         if 'data' in json_data and isinstance(json_data['data'], pd.Series):
+            # Utilizar get para evitar KeyError si la clave no existe
             table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
         else:
-            print("La estructura del JSON no contiene los datos esperados.")
+            print("La estructura del JSON no contiene los datos esperados o 'data' no es una serie.")
+            print(f"Estructura recibida: {json_data.head()}")
             return pd.DataFrame(), []
 
         # Normalizar los datos extraídos en un DataFrame
