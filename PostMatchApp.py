@@ -15,10 +15,7 @@ cxG = 1.53570624482222
 
 @st.cache_data(ttl=60*15)
 
-lg_id_dict = {
-    'MLS': 130
-    # Añade aquí otros identificadores de liga
-}
+
 
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
