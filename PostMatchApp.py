@@ -63,42 +63,46 @@ def get_fotmob_table_data(lg):
                     df_all = pd.concat([df_all, row])
 
         df_all.reset_index(drop=True, inplace=True)
-        df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
-        df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
-        df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
-        df_all['real_position'] = df_all['idx']
-        df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
-        df_all.reset_index(drop=True, inplace=True)
-        df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-        df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
 
-        # Selección de columnas y renombramiento
-        tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
-            'pts': 'Pts',
-            'name': 'Team',
-            'real_position': 'Pos',
-            'goals': 'GF',
-            'conceded_goals': 'GA',
-            'played': 'M',
-            'wins': 'W',
-            'draws': 'D',
-            'losses': 'L',
-            'goalConDiff': 'GD'
-        })
-        tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
-        logos = tables.logo.tolist()[::-1]
-        tables = tables.iloc[:, :-1]
+        # Verificar si las columnas necesarias existen antes de procesarlas
+        if 'id' in df_all and 'scoresStr' in df_all and 'idx' in df_all:
+            df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
+            df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
+            df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
+            df_all['real_position'] = df_all['idx']
+            df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
+            df_all.reset_index(drop=True, inplace=True)
+            df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+            df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
 
-        tables.rename(columns={'Pos': ' '}, inplace=True)
+            # Selección de columnas y renombramiento
+            tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
+                'pts': 'Pts',
+                'name': 'Team',
+                'real_position': 'Pos',
+                'goals': 'GF',
+                'conceded_goals': 'GA',
+                'played': 'M',
+                'wins': 'W',
+                'draws': 'D',
+                'losses': 'L',
+                'goalConDiff': 'GD'
+            })
+            tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
+            logos = tables.logo.tolist()[::-1]
+            tables = tables.iloc[:, :-1]
 
-        indexdf = tables[::-1].copy()
-        return indexdf, logos
+            tables.rename(columns={'Pos': ' '}, inplace=True)
+
+            indexdf = tables[::-1].copy()
+            return indexdf, logos
+        else:
+            print("Las columnas necesarias no se encontraron en los datos.")
+            return pd.DataFrame(), []
 
     except KeyError as e:
         print(f"Error al procesar los datos de la tabla: {e}")
         return pd.DataFrame(), []
-        
-        
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
     plt.clf()
@@ -155,34 +159,15 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
     ax_point_2 = DC_to_NFC([2.75, 0.75])
     ax_width = abs(ax_point_1[0] - ax_point_2[0])
     ax_height = abs(ax_point_1[1] - ax_point_2[1])
-    
-    def ax_logo(link, ax):
-        club_icon = Image.open(urllib.request.urlopen(link))
-        ax.imshow(club_icon)
-        ax.axis('off')
-        return ax
 
-    for x in range(0, nrows):
-        ax_coords = DC_to_NFC([0, x + .25])
-        ax = fig.add_axes([ax_coords[0], ax_coords[1], ax_width, ax_height])
-        ax_logo(logos[x], ax)
-    
-    fig.text(
-        x=0.15, y=.91,
-        s=f'{lg} Table',
-        ha='left',
-        va='bottom',
-        weight='bold',
-        size=11, color='#4A2E19'
-    )
-    fig.text(
-        x=0.15, y=.9,
-        s=f'Table code by @sonofacorner\nTable is from FotMob | football-match-reports.streamlit.app',
-        ha='left',
-        va='top',
-        weight='regular',
-        size=6, color='#4A2E19'
-    )
+    # Manejar errores de logos
+    if len(logos) != nrows:
+        print(f"Error: La cantidad de logos ({len(logos)}) no coincide con la cantidad de filas ({nrows}).")
+        logos = logos[:nrows]  # Ajustar para evitar errores
+
+    # Mostrar los logos correctamente ajustados
+    for idx, (logo, y) in enumerate(zip(logos, range(nrows))):
+        ax.imshow(plt.imread(logo), extent=[-0.25, 0.75, y - 0.5, y + 0.5], aspect='auto')
 
     return fig
 
