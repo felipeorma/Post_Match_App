@@ -17,7 +17,7 @@ def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
     
     # Generar la URL de la API con el identificador de la liga
-    url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
+    url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict.get(lg, 'default_id')}"
     print(f"Fetching data from URL: {url}")  # Verifica la URL utilizada
     
     # Solicitar los datos desde la API de FotMob
@@ -43,21 +43,14 @@ def get_fotmob_table_data(lg):
         data = json_data['data']
         
         # Verificar la estructura del JSON y extraer los datos
-        if len(data) > 0 and isinstance(data.iloc[0], dict):
-            try:
-                if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu lg_lookup
-                    table_data = []
-                    for item in data:
-                        if 'table' in item and 'all' in item['table']:
-                            table_data.extend(item['table']['all'])
-                else:
-                    table_data = [item['table']['all'] for item in data if 'table' in item and 'all' in item['table']]
-            except Exception as e:
-                print(f"Error processing league-specific structure: {e}")
-                return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
+        table_data = []
+        if isinstance(data, pd.Series):
+            for item in data:
+                if isinstance(item, dict) and 'table' in item and 'all' in item['table']:
+                    table_data.extend(item['table']['all'])
         else:
-            print("Unexpected data format.")
-            return pd.DataFrame(), []  # Si el formato no es el esperado, retorna vacío
+            print("Data is not in expected format.")
+            return pd.DataFrame(), []
     else:
         print("Key 'data' not found in JSON structure.")
         return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
