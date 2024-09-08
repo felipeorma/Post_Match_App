@@ -15,54 +15,65 @@ cxG = 1.53570624482222
 
 @st.cache_data(ttl=60*15)
 
+lg_id_dict = {
+    'MLS': 130
+    # Añade aquí otros identificadores de liga
+}
+
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
-    #######################################################
     
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.getText()))
     
-    table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
-    df = pd.json_normalize(table)
-    df = df.T
-    
+    # Ajustar para la MLS
+    if lg == 'MLS':
+        table_data = json_data
+        df = pd.json_normalize(table_data, sep='_')
+        df = df[['table_all']]
+        df = pd.json_normalize(df['table_all'].iloc[0])
+    else:
+        table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
+        df = pd.json_normalize(table)
+        df = df.T
+
     df_all = pd.DataFrame()
     for i in range(len(df)):
         for j in range(len(df.columns)):
-            row = pd.DataFrame(pd.Series(df.iloc[i,j])).T
-            df_all = pd.concat([df_all,row])
-    df_all.reset_index(drop=True,inplace=True)
+            row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
+            df_all = pd.concat([df_all, row])
+    df_all.reset_index(drop=True, inplace=True)
     
     df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
     df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
     df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
     df_all['real_position'] = df_all['idx']
-    df_all.sort_values(by=['real_position'],ascending=True,inplace=True)
-    df_all.reset_index(drop=True,inplace=True)
-    df_all['Goals per match'] = [df_all['goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
-    df_all['Goals against per match'] = [df_all['conceded_goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
+    df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
+    df_all.reset_index(drop=True, inplace=True)
+    df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+    df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
     
-    tables = df_all[['real_position','name','played','wins','draws','losses','pts','goals','conceded_goals','goalConDiff','logo']].rename(columns={
-        'pts':'Pts',
-        'name':'Team',
-        'real_position':'Pos',
-        'xg':'xG',
-        'xgConceded':'xGA',
-        'goals':'GF',
-        'conceded_goals':'GA',
-        'played':'M',
-        'wins':'W',
-        'draws':'D',
-        'losses':'L',
-        'goalConDiff':'GD'
+    tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
+        'pts': 'Pts',
+        'name': 'Team',
+        'real_position': 'Pos',
+        'xg': 'xG',
+        'xgConceded': 'xGA',
+        'goals': 'GF',
+        'conceded_goals': 'GA',
+        'played': 'M',
+        'wins': 'W',
+        'draws': 'D',
+        'losses': 'L',
+        'goalConDiff': 'GD'
     })
-    tables[['Pts','GF','GA','Pos','M']] = tables[['Pts','GF','GA','Pos','M']].astype(int)
+    tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
     logos = tables.logo.tolist()[::-1]
-    tables = tables.iloc[:,:-1]
+    tables = tables.iloc[:, :-1]
     
-    tables.rename(columns={'Pos':' '},inplace=True)
+    tables.rename(columns={'Pos': ' '}, inplace=True)
     
     indexdf = tables[::-1].copy()
 
@@ -70,14 +81,13 @@ def get_fotmob_table_data(lg):
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
     plt.clf()
-    sns.set(rc={'axes.facecolor':'#fbf9f4', 'figure.facecolor':'#fbf9f4',
-               'ytick.labelcolor':'#4A2E19', 'xtick.labelcolor':'#4A2E19'})
+    sns.set(rc={'axes.facecolor': '#fbf9f4', 'figure.facecolor': '#fbf9f4',
+               'ytick.labelcolor': '#4A2E19', 'xtick.labelcolor': '#4A2E19'})
     
-    
-    fig = plt.figure(figsize=(5,6), dpi=200)
+    fig = plt.figure(figsize=(5, 6), dpi=200)
     ax = plt.subplot()
     
-    ncols = len(indexdf.columns.tolist())+1
+    ncols = len(indexdf.columns.tolist()) + 1
     nrows = indexdf.shape[0]
     
     ax.set_xlim(0, ncols + .5)
@@ -92,7 +102,7 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
             weight = 'regular'
             ax.annotate(
                 xy=(positions[j], i + .5),
-                text = text_label.replace(' U18',''),
+                text=text_label.replace(' U18', ''),
                 ha='left',
                 va='center', color='#4A2E19',
                 weight=weight,
@@ -101,19 +111,19 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
     
     column_names = columns
     for index, c in enumerate(column_names):
-            ax.annotate(
-                xy=(positions[index], nrows + .25),
-                text=column_names[index],
-                ha='left',
-                va='bottom',
-                weight='bold', color='#4A2E19',
-                size=7.5
-            )
+        ax.annotate(
+            xy=(positions[index], nrows + .25),
+            text=column_names[index],
+            ha='left',
+            va='bottom',
+            weight='bold', color='#4A2E19',
+            size=7.5
+        )
     
     ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [nrows, nrows], lw=1.5, color='black', marker='', zorder=4)
     ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [0, 0], lw=1.5, color='black', marker='', zorder=4)
     for x in range(1, nrows):
-        ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [x, x], lw=.5, color='gray', ls=':', zorder=3 , marker='')
+        ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [x, x], lw=.5, color='gray', ls=':', zorder=3, marker='')
     
     ax.set_axis_off()
     
