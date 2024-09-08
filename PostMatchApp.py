@@ -40,22 +40,34 @@ def get_fotmob_table_data(lg):
     # Manejar la estructura diferente de la MLS
     if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu lg_lookup
         try:
-            # Ajusta la extracción de acuerdo a la estructura específica de la MLS
-            tables = json_data['data']['tables']
-            table = tables[0]['table']  # Suponiendo que el primer elemento es el que queremos
-            
-            # Asegúrate de que la estructura del `table` es la esperada
-            if 'all' in table:
-                table_data = table['all']
+            # Verifica la existencia de la clave 'data' y 'tables'
+            if 'data' in json_data.columns:
+                data = json_data['data'][0]  # Accede al primer elemento de 'data'
+                if 'tables' in data:
+                    tables = data['tables']
+                    if len(tables) > 0 and 'table' in tables[0]:
+                        table = tables[0]['table']
+                        if 'all' in table:
+                            table_data = table['all']
+                        else:
+                            print("The 'all' key is missing in the MLS table.")
+                            return pd.DataFrame(), []  # Si falta la clave 'all', retorna vacío
+                    else:
+                        print("The 'tables' key is missing or empty in the MLS data.")
+                        return pd.DataFrame(), []  # Si falta 'table', retorna vacío
+                else:
+                    print("The 'tables' key is missing in the MLS data.")
+                    return pd.DataFrame(), []  # Si falta 'tables', retorna vacío
             else:
-                print("The 'all' key is missing in the table structure for MLS.")
-                return pd.DataFrame(), []  # Si falta la clave 'all', retorna vacío
+                print("The 'data' key is missing in the JSON structure.")
+                return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
         except Exception as e:
             print(f"Error processing MLS structure: {e}")
             return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
     else:
         # Estructura general para otras ligas
         try:
+            # Verifica la existencia de las claves 'data' y 'table.all'
             if 'data' in json_data.columns:
                 table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', {}))
             else:
@@ -66,18 +78,18 @@ def get_fotmob_table_data(lg):
             return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
 
     # Transformación de los datos extraídos
-    df = pd.json_normalize(table_data)
-    df = df.T
-    
-    df_all = pd.DataFrame()
-    for i in range(len(df)):
-        for j in range(len(df.columns)):
-            row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
-            df_all = pd.concat([df_all, row])
-    df_all.reset_index(drop=True, inplace=True)
-    
-    # Procesamiento adicional de la tabla
     try:
+        df = pd.json_normalize(table_data)
+        df = df.T
+        
+        df_all = pd.DataFrame()
+        for i in range(len(df)):
+            for j in range(len(df.columns)):
+                row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
+                df_all = pd.concat([df_all, row])
+        df_all.reset_index(drop=True, inplace=True)
+        
+        # Adición de nuevas columnas
         df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
         df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
         df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
