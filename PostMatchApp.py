@@ -29,22 +29,21 @@ def get_fotmob_table_data(lg):
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay un error
     
     # Inspeccionar el contenido de la respuesta
-    soup = BeautifulSoup(page.content, "html.parser")
     try:
-        json_data = pd.read_json(StringIO(soup.get_text()))
-        print(f"Extracted JSON Data: {json_data.head()}")  # Imprime una vista previa del JSON
+        json_data = page.json()
+        print(f"Extracted JSON Data: {json_data}")  # Imprime el JSON completo
     except ValueError as e:
         print(f"Error reading JSON data: {e}")
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
     
     # Verificar la estructura del JSON
-    print(json_data.keys())  # Imprime las claves del DataFrame
-    if 'data' in json_data.columns:
+    print(json_data.keys())  # Imprime las claves del JSON
+    if 'data' in json_data:
         data = json_data['data']
         
         # Verificar la estructura del JSON y extraer los datos
         table_data = []
-        if isinstance(data, pd.Series):
+        if isinstance(data, list):
             for item in data:
                 if isinstance(item, dict) and 'table' in item and 'all' in item['table']:
                     table_data.extend(item['table']['all'])
@@ -101,6 +100,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
+
     
 
 
