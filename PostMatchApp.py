@@ -16,52 +16,45 @@ cxG = 1.53570624482222
 @st.cache_data(ttl=60*15)
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
-    lg_id_dict = {'MLS': 130}  # Asegúrate de que este diccionario incluya las ligas necesarias
+    lg_id_dict = {
+        'MLS': 130,
+        'Premier League': 47,
+        'La Liga': 87,
+        'Serie A': 55,
+        'Bundesliga': 54,
+        'Ligue 1': 53
+    }
 
-    # Verificar si la liga está en el diccionario
     if lg not in lg_id_dict:
-        st.error(f"Error: La liga {lg} no está definida en el diccionario de IDs.")
+        print(f"Error: La liga {lg} no está definida en el diccionario de IDs.")
         return pd.DataFrame(), []
 
-    # Generar la URL para obtener los datos de la liga
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
     response = requests.get(url)
 
-    # Verificar si la solicitud fue exitosa
     if response.status_code != 200:
-        st.error(f"Error al obtener los datos desde FotMob. Código de estado: {response.status_code}")
+        print(f"Error al obtener los datos desde FotMob. Código de estado: {response.status_code}")
         return pd.DataFrame(), []
 
-    # Leer la respuesta JSON
     try:
         soup = BeautifulSoup(response.content, "html.parser")
         json_data = pd.read_json(StringIO(soup.get_text()))
     except Exception as e:
-        st.error(f"Error al leer los datos JSON: {e}")
+        print(f"Error al leer los datos JSON: {e}")
         return pd.DataFrame(), []
 
-    # Intentar extraer la tabla de datos del JSON
     try:
-        # Verificar la estructura del JSON
+        # Verificar la estructura y extraer la tabla de datos de manera segura
         if 'data' in json_data and isinstance(json_data['data'], pd.Series):
-            # Extraer la tabla de datos de manera segura
-            table = json_data['data'].apply(lambda x: x.get('table', None))
-            # Filtrar las entradas nulas
-            table = table[table.notnull()]
-            if table.empty:
-                st.error("No se encontraron tablas válidas en los datos JSON.")
-                return pd.DataFrame(), []
-            # Extraer 'all' de cada tabla, manejando errores si 'all' no está presente
-            table = table.apply(lambda x: x.get('all', []) if isinstance(x, dict) else [])
+            table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
         else:
-            st.error("La estructura del JSON no contiene los datos esperados o 'data' no es una Serie.")
+            print("La estructura del JSON no contiene los datos esperados.")
             return pd.DataFrame(), []
 
         # Normalizar los datos extraídos en un DataFrame
         df = pd.json_normalize(table)
         df = df.T
 
-        # Procesar los datos de la tabla para formar el DataFrame final
         df_all = pd.DataFrame()
         for i in range(len(df)):
             for j in range(len(df.columns)):
@@ -72,45 +65,43 @@ def get_fotmob_table_data(lg):
         df_all.reset_index(drop=True, inplace=True)
 
         # Verificar si las columnas necesarias existen antes de procesarlas
-        required_columns = ['id', 'scoresStr', 'idx', 'played']
-        missing_columns = [col for col in required_columns if col not in df_all]
-        if missing_columns:
-            st.error(f"Las siguientes columnas necesarias no se encontraron en los datos: {missing_columns}")
+        if 'id' in df_all and 'scoresStr' in df_all and 'idx' in df_all:
+            df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
+            df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
+            df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
+            df_all['real_position'] = df_all['idx']
+            df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
+            df_all.reset_index(drop=True, inplace=True)
+            df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+            df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+
+            # Selección de columnas y renombramiento
+            tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
+                'pts': 'Pts',
+                'name': 'Team',
+                'real_position': 'Pos',
+                'goals': 'GF',
+                'conceded_goals': 'GA',
+                'played': 'M',
+                'wins': 'W',
+                'draws': 'D',
+                'losses': 'L',
+                'goalConDiff': 'GD'
+            })
+            tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
+            logos = tables.logo.tolist()[::-1]
+            tables = tables.iloc[:, :-1]
+
+            tables.rename(columns={'Pos': ' '}, inplace=True)
+
+            indexdf = tables[::-1].copy()
+            return indexdf, logos
+        else:
+            print("Las columnas necesarias no se encontraron en los datos.")
             return pd.DataFrame(), []
 
-        df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
-        df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
-        df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
-        df_all['real_position'] = df_all['idx']
-        df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
-        df_all.reset_index(drop=True, inplace=True)
-        df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-        df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-
-        # Selección de columnas y renombramiento
-        tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
-            'pts': 'Pts',
-            'name': 'Team',
-            'real_position': 'Pos',
-            'goals': 'GF',
-            'conceded_goals': 'GA',
-            'played': 'M',
-            'wins': 'W',
-            'draws': 'D',
-            'losses': 'L',
-            'goalConDiff': 'GD'
-        })
-        tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
-        logos = tables.logo.tolist()[::-1]
-        tables = tables.iloc[:, :-1]
-
-        tables.rename(columns={'Pos': ' '}, inplace=True)
-
-        indexdf = tables[::-1].copy()
-        return indexdf, logos
-
     except KeyError as e:
-        st.error(f"Error al procesar los datos de la tabla: {e}")
+        print(f"Error al procesar los datos de la tabla: {e}")
         return pd.DataFrame(), []
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
@@ -171,15 +162,29 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
 
     # Manejar errores de logos
     if len(logos) != nrows:
-        st.error(f"Error: La cantidad de logos ({len(logos)}) no coincide con la cantidad de filas ({nrows}).")
+        print(f"Error: La cantidad de logos ({len(logos)}) no coincide con la cantidad de filas ({nrows}).")
         logos = logos[:nrows]  # Ajustar para evitar errores
 
     # Mostrar los logos correctamente ajustados
     for idx, (logo, y) in enumerate(zip(logos, range(nrows))):
-        try:
-            ax.imshow(plt.imread(logo), extent=[-0.25, 0.75, y - 0.5, y + 0.5], aspect='auto')
-        except Exception as e:
-            st.warning(f"Error al cargar el logo para la fila {y}: {e}")
+        ax.imshow(plt.imread(logo), extent=[-0.25, 0.75, y - 0.5, y + 0.5], aspect='auto')
+
+    fig.text(
+        x=0.15, y=.91,
+        s=f'{lg} Table',
+        ha='left',
+        va='bottom',
+        weight='bold',
+        size=11, color='#4A2E19'
+    )
+    fig.text(
+        x=0.15, y=.9,
+        s=f'Table code by @sonofacorner\nTable is from FotMob | football-match-reports.streamlit.app',
+        ha='left',
+        va='top',
+        weight='regular',
+        size=6, color='#4A2E19'
+    )
 
     return fig
 
