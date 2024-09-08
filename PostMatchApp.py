@@ -19,51 +19,77 @@ def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
     #######################################################
     
+    # Genera la URL con el identificador de la liga
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
+    print(f"Fetching data from URL: {url}")  # Verifica la URL utilizada
+    
+    # Solicita los datos de la API de FotMob
     page = requests.get(url)
+    
+    # Verificación del estado de la respuesta
+    if page.status_code != 200:
+        print(f"Error fetching data, status code: {page.status_code}")
+        return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay un error
+    
+    # Inspección del contenido de la respuesta para verificar la estructura
     soup = BeautifulSoup(page.content, "html.parser")
-    json_data = pd.read_json(StringIO(soup.getText()))
+    try:
+        json_data = pd.read_json(StringIO(soup.getText()))
+        print(f"Extracted JSON Data: {json_data.head()}")  # Verifica el contenido inicial del JSON
+    except ValueError as e:
+        print(f"Error reading JSON data: {e}")
+        return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
     
-    table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
-    df = pd.json_normalize(table)
-    df = df.T
-    
+    # Procesamiento de los datos extraídos del JSON
+    try:
+        table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
+        df = pd.json_normalize(table)
+        df = df.T
+    except KeyError as e:
+        print(f"Key error: {e} - JSON structure may have changed.")
+        return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la clave
+
     df_all = pd.DataFrame()
     for i in range(len(df)):
         for j in range(len(df.columns)):
-            row = pd.DataFrame(pd.Series(df.iloc[i,j])).T
-            df_all = pd.concat([df_all,row])
-    df_all.reset_index(drop=True,inplace=True)
+            row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
+            df_all = pd.concat([df_all, row])
+    df_all.reset_index(drop=True, inplace=True)
     
-    df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
-    df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
-    df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
-    df_all['real_position'] = df_all['idx']
-    df_all.sort_values(by=['real_position'],ascending=True,inplace=True)
-    df_all.reset_index(drop=True,inplace=True)
-    df_all['Goals per match'] = [df_all['goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
-    df_all['Goals against per match'] = [df_all['conceded_goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
-    
-    tables = df_all[['real_position','name','played','wins','draws','losses','pts','goals','conceded_goals','goalConDiff','logo']].rename(columns={
-        'pts':'Pts',
-        'name':'Team',
-        'real_position':'Pos',
-        'xg':'xG',
-        'xgConceded':'xGA',
-        'goals':'GF',
-        'conceded_goals':'GA',
-        'played':'M',
-        'wins':'W',
-        'draws':'D',
-        'losses':'L',
-        'goalConDiff':'GD'
+    # Agrega las columnas adicionales necesarias
+    try:
+        df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
+        df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
+        df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
+        df_all['real_position'] = df_all['idx']
+        df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
+        df_all.reset_index(drop=True, inplace=True)
+        df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+        df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+    except Exception as e:
+        print(f"Error processing table data: {e}")
+        return pd.DataFrame(), []
+
+    # Creación de la tabla final con las columnas relevantes
+    tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
+        'pts': 'Pts',
+        'name': 'Team',
+        'real_position': 'Pos',
+        'xg': 'xG',
+        'xgConceded': 'xGA',
+        'goals': 'GF',
+        'conceded_goals': 'GA',
+        'played': 'M',
+        'wins': 'W',
+        'draws': 'D',
+        'losses': 'L',
+        'goalConDiff': 'GD'
     })
-    tables[['Pts','GF','GA','Pos','M']] = tables[['Pts','GF','GA','Pos','M']].astype(int)
+    tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
     logos = tables.logo.tolist()[::-1]
-    tables = tables.iloc[:,:-1]
+    tables = tables.iloc[:, :-1]
     
-    tables.rename(columns={'Pos':' '},inplace=True)
-    
+    tables.rename(columns={'Pos': ' '}, inplace=True)
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
