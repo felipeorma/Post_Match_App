@@ -42,10 +42,17 @@ def get_fotmob_table_data(lg):
 
     # Intentar extraer la tabla de datos del JSON
     try:
-        # Verificar si la clave 'data' existe y es una Serie de Pandas
+        # Verificar la estructura del JSON
         if 'data' in json_data and isinstance(json_data['data'], pd.Series):
-            # Utilizar una extracción segura con .get para evitar KeyError
-            table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
+            # Extraer la tabla de datos de manera segura
+            table = json_data['data'].apply(lambda x: x.get('table', None))
+            # Filtrar las entradas nulas
+            table = table[table.notnull()]
+            if table.empty:
+                st.error("No se encontraron tablas válidas en los datos JSON.")
+                return pd.DataFrame(), []
+            # Extraer 'all' de cada tabla, manejando errores si 'all' no está presente
+            table = table.apply(lambda x: x.get('all', []) if isinstance(x, dict) else [])
         else:
             st.error("La estructura del JSON no contiene los datos esperados o 'data' no es una Serie.")
             return pd.DataFrame(), []
