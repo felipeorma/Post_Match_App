@@ -161,7 +161,7 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
 nbi_links = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/NBI_Match_Links.csv")
 lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/PostMatchLeagues.csv")
 league_list = lg_lookup.League.tolist()
-lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeormaPost_Match_App/main/PostMatchLeagues.csv")
+lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/PostMatchLeagues.csv")
 lg_id_dict = {lg_lookup.League[i]: lg_lookup.FotMob[i] for i in range(len(lg_lookup))}
 
 
@@ -246,14 +246,14 @@ for i in range(len(render_matches)):
             nbi_game_link = nbi_links[nbi_links.MatchName==render_matches[i]]['URL'].values[0]
             with report_tab:
                 st.write(f'Link to Full Match Video (some games may not have been shown on M4Sport and therefore are not available):  \n  \n{render_matches[i][:-11]} -> {nbi_game_link}')
-        url = f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/Image_Files/{league.replace(' ','%20')}/{match_string}.png"
+        url = f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/Image_Files/{league.replace(' ','%20')}/{match_string}.png"
         response = requests.get(url)
         game_image = Image.open(io.BytesIO(response.content))
         report_tab.image(game_image)
     except:
         st.write(f"Apologies, {render_matches[i]} must not be available yet. Please check in later!")
 
-team_data = pd.read_csv(f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/Stat_Files/{league.replace(' ','%20')}.csv")
+team_data = pd.read_csv(f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/Stat_Files/{league.replace(' ','%20')}.csv")
 
 conditions_team = [
     team_data['Goals'] > team_data['Goals Conceded'],
