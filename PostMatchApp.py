@@ -15,7 +15,6 @@ cxG = 1.53570624482222
 @st.cache_data(ttl=60*15)
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
-    lg_id_dict = {"MLS": 130}  # Asegúrate de tener el mapeo correcto de ligas a IDs
     
     # Generar la URL de la API con el identificador de la liga
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
@@ -39,107 +38,82 @@ def get_fotmob_table_data(lg):
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
     
     # Verificar la estructura del JSON
-    print("JSON Keys:", json_data.keys())  # Imprime las claves del DataFrame
+    print(json_data.keys())  # Imprime las claves del DataFrame
     if 'data' in json_data.columns:
         data = json_data['data']
-        print("Data preview:", data.head())  # Imprime una vista previa de 'data'
-        
-        if lg == "MLS":  # Manejo específico para MLS
+        print(f"Data Keys: {data[0].keys()}")  # Imprime las claves del primer elemento en 'data'
+        if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu lg_lookup
             try:
-                if not data.empty:
-                    data = data.iloc[0]  # Accede al primer elemento
-                    print("Data structure:", data.keys())  # Imprime las claves en 'data'
-                    
-                    if 'tables' in data:
-                        tables = data['tables']
-                        print("Tables structure:", tables[0].keys())  # Imprime las claves en 'tables'
-                        
-                        if len(tables) > 0 and 'table' in tables[0]:
-                            table = tables[0]['table']
-                            print("Table structure:", table.keys())  # Imprime las claves en 'table'
-                            
-                            if 'all' in table:
-                                table_data = table['all']
-                            else:
-                                print("The 'all' key is missing in the MLS table.")
-                                return pd.DataFrame(), []  # Si falta la clave 'all', retorna vacío
-                        else:
-                            print("The 'tables' key is missing or empty in the MLS data.")
-                            return pd.DataFrame(), []  # Si falta 'table', retorna vacío
-                    else:
-                        print("The 'tables' key is missing in the MLS data.")
-                        return pd.DataFrame(), []  # Si falta 'tables', retorna vacío
+                table_data = []
+                if len(data) > 0:
+                    for item in data:
+                        if 'table' in item and 'all' in item['table']:
+                            table_data.append(item['table']['all'])
                 else:
-                    print("Data list is empty.")
-                    return pd.DataFrame(), []  # Si la lista de datos está vacía, retorna vacío
+                    print("The 'data' list is empty.")
             except Exception as e:
                 print(f"Error processing MLS structure: {e}")
                 return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
         else:
-            # Estructura general para otras ligas
             try:
-                if not data.empty:
-                    table = data.apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', {}))
-                    print("Table preview:", table.head())  # Imprime una vista previa de 'table'
-                else:
-                    print("Data list is empty.")
-                    return pd.DataFrame(), []  # Si la lista de datos está vacía, retorna vacío
+                # Estructura general para otras ligas
+                table_data = data.apply(lambda x: x.get('table', {}).get('all', {}))
             except Exception as e:
                 print(f"Error accessing table data: {e}")
                 return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
+    else:
+        print("Key 'data' not found in JSON structure.")
+        return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
 
     # Transformación de los datos extraídos
     try:
-        if 'table_data' in locals():  # Verifica que table_data existe
-            df = pd.json_normalize(table_data)
-            df = df.T
-            
-            df_all = pd.DataFrame()
-            for i in range(len(df)):
-                for j in range(len(df.columns)):
-                    row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
-                    df_all = pd.concat([df_all, row])
-            df_all.reset_index(drop=True, inplace=True)
-            
-            # Adición de nuevas columnas
-            df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
-            df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
-            df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
-            df_all['real_position'] = df_all['idx']
-            df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
-            df_all.reset_index(drop=True, inplace=True)
-            df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-            df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-            
-            # Creación de la tabla final con las columnas relevantes
-            tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
-                'pts': 'Pts',
-                'name': 'Team',
-                'real_position': 'Pos',
-                'xg': 'xG',
-                'xgConceded': 'xGA',
-                'goals': 'GF',
-                'conceded_goals': 'GA',
-                'played': 'M',
-                'wins': 'W',
-                'draws': 'D',
-                'losses': 'L',
-                'goalConDiff': 'GD'
-            })
-            tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
-            logos = tables.logo.tolist()[::-1]
-            tables = tables.iloc[:, :-1]
-            
-            tables.rename(columns={'Pos': ' '}, inplace=True)
-            indexdf = tables[::-1].copy()
-
-            return indexdf, logos
-        else:
-            print("No table data available.")
-            return pd.DataFrame(), []  # Retorna vacío si no hay datos en table_data
+        df = pd.json_normalize(table_data)
+        df = df.T
+        
+        df_all = pd.DataFrame()
+        for i in range(len(df)):
+            for j in range(len(df.columns)):
+                row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
+                df_all = pd.concat([df_all, row])
+        df_all.reset_index(drop=True, inplace=True)
+        
+        # Adición de nuevas columnas
+        df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
+        df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
+        df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
+        df_all['real_position'] = df_all['idx']
+        df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
+        df_all.reset_index(drop=True, inplace=True)
+        df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+        df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
     except Exception as e:
         print(f"Error processing table data: {e}")
-        return pd.DataFrame(), []  # Maneja cualquier otro error durante el procesamiento
+        return pd.DataFrame(), []
+
+    # Creación de la tabla final con las columnas relevantes
+    tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
+        'pts': 'Pts',
+        'name': 'Team',
+        'real_position': 'Pos',
+        'xg': 'xG',
+        'xgConceded': 'xGA',
+        'goals': 'GF',
+        'conceded_goals': 'GA',
+        'played': 'M',
+        'wins': 'W',
+        'draws': 'D',
+        'losses': 'L',
+        'goalConDiff': 'GD'
+    })
+    tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
+    logos = tables.logo.tolist()[::-1]
+    tables = tables.iloc[:, :-1]
+    
+    tables.rename(columns={'Pos': ' '}, inplace=True)
+    indexdf = tables[::-1].copy()
+
+    return indexdf, logos
+
 
 
 
