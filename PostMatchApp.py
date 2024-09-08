@@ -14,14 +14,13 @@ from io import StringIO
 cxG = 1.53570624482222
 
 @st.cache_data(ttl=60*15)
-
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
     lg_id_dict = {'MLS': 130}  # Asegúrate de que este diccionario incluya las ligas necesarias
 
     # Verificar si la liga está en el diccionario
     if lg not in lg_id_dict:
-        print(f"Error: La liga {lg} no está definida en el diccionario de IDs.")
+        st.error(f"Error: La liga {lg} no está definida en el diccionario de IDs.")
         return pd.DataFrame(), []
 
     # Generar la URL para obtener los datos de la liga
@@ -30,7 +29,7 @@ def get_fotmob_table_data(lg):
 
     # Verificar si la solicitud fue exitosa
     if response.status_code != 200:
-        print(f"Error al obtener los datos desde FotMob. Código de estado: {response.status_code}")
+        st.error(f"Error al obtener los datos desde FotMob. Código de estado: {response.status_code}")
         return pd.DataFrame(), []
 
     # Leer la respuesta JSON
@@ -38,7 +37,7 @@ def get_fotmob_table_data(lg):
         soup = BeautifulSoup(response.content, "html.parser")
         json_data = pd.read_json(StringIO(soup.get_text()))
     except Exception as e:
-        print(f"Error al leer los datos JSON: {e}")
+        st.error(f"Error al leer los datos JSON: {e}")
         return pd.DataFrame(), []
 
     # Intentar extraer la tabla de datos del JSON
@@ -47,7 +46,7 @@ def get_fotmob_table_data(lg):
         if 'data' in json_data and isinstance(json_data['data'], pd.Series):
             table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
         else:
-            print("La estructura del JSON no contiene los datos esperados.")
+            st.error("La estructura del JSON no contiene los datos esperados.")
             return pd.DataFrame(), []
 
         # Normalizar los datos extraídos en un DataFrame
@@ -65,7 +64,7 @@ def get_fotmob_table_data(lg):
         df_all.reset_index(drop=True, inplace=True)
 
         # Verificar si las columnas necesarias existen antes de procesarlas
-        if 'id' in df_all and 'scoresStr' in df_all and 'idx' in df_all:
+        if all(col in df_all for col in ['id', 'scoresStr', 'idx']):
             df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
             df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
             df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
@@ -97,11 +96,11 @@ def get_fotmob_table_data(lg):
             indexdf = tables[::-1].copy()
             return indexdf, logos
         else:
-            print("Las columnas necesarias no se encontraron en los datos.")
+            st.error("Las columnas necesarias no se encontraron en los datos.")
             return pd.DataFrame(), []
 
     except KeyError as e:
-        print(f"Error al procesar los datos de la tabla: {e}")
+        st.error(f"Error al procesar los datos de la tabla: {e}")
         return pd.DataFrame(), []
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
@@ -162,12 +161,15 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
 
     # Manejar errores de logos
     if len(logos) != nrows:
-        print(f"Error: La cantidad de logos ({len(logos)}) no coincide con la cantidad de filas ({nrows}).")
+        st.error(f"Error: La cantidad de logos ({len(logos)}) no coincide con la cantidad de filas ({nrows}).")
         logos = logos[:nrows]  # Ajustar para evitar errores
 
     # Mostrar los logos correctamente ajustados
     for idx, (logo, y) in enumerate(zip(logos, range(nrows))):
-        ax.imshow(plt.imread(logo), extent=[-0.25, 0.75, y - 0.5, y + 0.5], aspect='auto')
+        try:
+            ax.imshow(plt.imread(logo), extent=[-0.25, 0.75, y - 0.5, y + 0.5], aspect='auto')
+        except Exception as e:
+            st.warning(f"Error al cargar el logo para la fila {y}: {e}")
 
     return fig
 
