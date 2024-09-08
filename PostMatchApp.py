@@ -41,27 +41,23 @@ def get_fotmob_table_data(lg):
     print(json_data.keys())  # Imprime las claves del DataFrame
     if 'data' in json_data.columns:
         data = json_data['data']
-        print(f"Data Keys: {data[0].keys()}")  # Imprime las claves del primer elemento en 'data'
         
-        if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu lg_lookup
+        # Verificar la estructura del JSON y extraer los datos
+        if len(data) > 0 and isinstance(data.iloc[0], dict):
             try:
-                table_data = []
-                if len(data) > 0:
+                if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu lg_lookup
+                    table_data = []
                     for item in data:
                         if 'table' in item and 'all' in item['table']:
-                            table_data.append(item['table']['all'])
+                            table_data.extend(item['table']['all'])
                 else:
-                    print("The 'data' list is empty.")
+                    table_data = [item['table']['all'] for item in data if 'table' in item and 'all' in item['table']]
             except Exception as e:
-                print(f"Error processing MLS structure: {e}")
+                print(f"Error processing league-specific structure: {e}")
                 return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
         else:
-            try:
-                # Estructura general para otras ligas
-                table_data = data.apply(lambda x: x.get('table', {}).get('all', {}))
-            except Exception as e:
-                print(f"Error accessing table data: {e}")
-                return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
+            print("Unexpected data format.")
+            return pd.DataFrame(), []  # Si el formato no es el esperado, retorna vacío
     else:
         print("Key 'data' not found in JSON structure.")
         return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
