@@ -38,12 +38,18 @@ def get_fotmob_table_data(lg):
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
     
     # Manejar la estructura diferente de la MLS
-    if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu `lg_lookup`
+    if lg == "MLS":  # Cambia "MLS" al nombre exacto de la liga como aparece en tu lg_lookup
         try:
             # Ajusta la extracción de acuerdo a la estructura específica de la MLS
-            # Supongamos que la estructura tiene las claves `['standings', 'team', 'stats']`
-            table = json_data['standings'].apply(lambda x: x.get('team', {})).apply(lambda x: x.get('stats', {}))
-            print(f"MLS specific structure extracted.")
+            tables = json_data['data']['tables']
+            table = tables[0]['table']  # Suponiendo que el primer elemento es el que queremos
+            
+            # Asegúrate de que la estructura del `table` es la esperada
+            if 'all' in table:
+                table_data = table['all']
+            else:
+                print("The 'all' key is missing in the table structure for MLS.")
+                return pd.DataFrame(), []  # Si falta la clave 'all', retorna vacío
         except Exception as e:
             print(f"Error processing MLS structure: {e}")
             return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
@@ -60,7 +66,7 @@ def get_fotmob_table_data(lg):
             return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
 
     # Transformación de los datos extraídos
-    df = pd.json_normalize(table)
+    df = pd.json_normalize(table_data)
     df = df.T
     
     df_all = pd.DataFrame()
@@ -107,6 +113,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
+
 
 
 
