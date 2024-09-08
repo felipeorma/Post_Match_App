@@ -158,10 +158,10 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
 
 
 
-nbi_links = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/NBI_Match_Links.csv")
-lg_lookup = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/PostMatchLeagues.csv")
+nbi_links = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/NBI_Match_Links.csv")
+lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/PostMatchLeagues.csv")
 league_list = lg_lookup.League.tolist()
-lg_lookup = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/PostMatchLeagues.csv")
+lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeormaPost_Match_App/main/PostMatchLeagues.csv")
 lg_id_dict = {lg_lookup.League[i]: lg_lookup.FotMob[i] for i in range(len(lg_lookup))}
 
 
@@ -182,7 +182,7 @@ with st.expander('Disclaimer & Info'):
     - The Expected Points (xPts) model is a Pythagorean expectation model, using the xG output from my xG model. For more info on the method, please read my detailed explainer: https://cafetactiques.com/2023/04/15/creating-an-expected-points-model-inspired-by-pythagorean-expectation/
     ''')
 
-df = pd.read_csv(f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/League_Files/{league.replace(' ','%20')}%20Full%20Match%20List.csv")
+df = pd.read_csv(f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/League_Files/{league.replace(' ','%20')}%20Full%20Match%20List.csv")
 df['Match_Name'] = df['Match'] + ' ' + df['Date']
 
 table_indexdf, table_logos = get_fotmob_table_data(lgg)
