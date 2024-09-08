@@ -14,41 +14,45 @@ from io import StringIO
 cxG = 1.53570624482222
 
 @st.cache_data(ttl=60*15)
-
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
-    #######################################################
     
-    # Genera la URL con el identificador de la liga
+    # Generar la URL de la API con el identificador de la liga
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
     print(f"Fetching data from URL: {url}")  # Verifica la URL utilizada
     
-    # Solicita los datos de la API de FotMob
+    # Solicitar los datos desde la API de FotMob
     page = requests.get(url)
     
-    # Verificación del estado de la respuesta
+    # Verificar el estado de la respuesta
     if page.status_code != 200:
         print(f"Error fetching data, status code: {page.status_code}")
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay un error
     
-    # Inspección del contenido de la respuesta para verificar la estructura
+    # Inspeccionar el contenido de la respuesta
     soup = BeautifulSoup(page.content, "html.parser")
     try:
         json_data = pd.read_json(StringIO(soup.getText()))
-        print(f"Extracted JSON Data: {json_data.head()}")  # Verifica el contenido inicial del JSON
+        print(f"Extracted JSON Data: {json_data.head()}")  # Verifica los primeros datos del JSON
     except ValueError as e:
         print(f"Error reading JSON data: {e}")
         return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
     
-    # Procesamiento de los datos extraídos del JSON
+    # Verificar la estructura del JSON y manejar posibles variaciones
     try:
-        table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
-        df = pd.json_normalize(table)
-        df = df.T
-    except KeyError as e:
-        print(f"Key error: {e} - JSON structure may have changed.")
-        return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la clave
+        if 'data' in json_data.columns:
+            table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', {}))
+        else:
+            print("The 'data' key is missing in the JSON structure.")
+            return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
+    except Exception as e:
+        print(f"Error accessing table data: {e}")
+        return pd.DataFrame(), []  # Maneja cualquier otro error durante el acceso
 
+    # Transformación de los datos extraídos
+    df = pd.json_normalize(table)
+    df = df.T
+    
     df_all = pd.DataFrame()
     for i in range(len(df)):
         for j in range(len(df.columns)):
@@ -56,7 +60,7 @@ def get_fotmob_table_data(lg):
             df_all = pd.concat([df_all, row])
     df_all.reset_index(drop=True, inplace=True)
     
-    # Agrega las columnas adicionales necesarias
+    # Procesamiento adicional de la tabla
     try:
         df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
         df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
@@ -93,6 +97,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
+
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
     plt.clf()
