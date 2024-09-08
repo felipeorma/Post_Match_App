@@ -12,100 +12,61 @@ import numpy as np
 from io import StringIO
 
 cxG = 1.53570624482222
+
 @st.cache_data(ttl=60*15)
+
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
+    #######################################################
     
-    # Generar la URL de la API con el identificador de la liga
-    url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict.get(lg, 'default_id')}"
-    print(f"Fetching data from URL: {url}")  # Verifica la URL utilizada
-    
-    # Solicitar los datos desde la API de FotMob
+    url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
     page = requests.get(url)
+    soup = BeautifulSoup(page.content, "html.parser")
+    json_data = pd.read_json(StringIO(soup.getText()))
     
-    # Verificar el estado de la respuesta
-    if page.status_code != 200:
-        print(f"Error fetching data, status code: {page.status_code}")
-        return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay un error
+    table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
+    df = pd.json_normalize(table)
+    df = df.T
     
-    # Inspeccionar el contenido de la respuesta
-    try:
-        json_data = page.json()
-        print(f"Extracted JSON Data: {json_data}")  # Imprime el JSON completo
-    except ValueError as e:
-        print(f"Error reading JSON data: {e}")
-        return pd.DataFrame(), []  # Retorna un DataFrame vacío si hay error en la conversión
+    df_all = pd.DataFrame()
+    for i in range(len(df)):
+        for j in range(len(df.columns)):
+            row = pd.DataFrame(pd.Series(df.iloc[i,j])).T
+            df_all = pd.concat([df_all,row])
+    df_all.reset_index(drop=True,inplace=True)
     
-    # Verificar la estructura del JSON
-    print(json_data.keys())  # Imprime las claves del JSON
-    if 'data' in json_data:
-        data = json_data['data']
-        
-        # Verificar la estructura del JSON y extraer los datos
-        table_data = []
-        if isinstance(data, list):
-            for item in data:
-                if isinstance(item, dict) and 'table' in item and 'all' in item['table']:
-                    table_data.extend(item['table']['all'])
-        else:
-            print("Data is not in expected format.")
-            return pd.DataFrame(), []
-    else:
-        print("Key 'data' not found in JSON structure.")
-        return pd.DataFrame(), []  # Si falta la clave 'data', retorna vacío
-
-    # Transformación de los datos extraídos
-    try:
-        df = pd.json_normalize(table_data)
-        df = df.T
-        
-        df_all = pd.DataFrame()
-        for i in range(len(df)):
-            for j in range(len(df.columns)):
-                row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
-                df_all = pd.concat([df_all, row])
-        df_all.reset_index(drop=True, inplace=True)
-        
-        # Adición de nuevas columnas
-        df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
-        df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
-        df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
-        df_all['real_position'] = df_all.index
-        df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
-        df_all.reset_index(drop=True, inplace=True)
-        df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all['played'][i] > 0 else 0 for i in range(len(df_all))]
-        df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all['played'][i] > 0 else 0 for i in range(len(df_all))]
-    except Exception as e:
-        print(f"Error processing table data: {e}")
-        return pd.DataFrame(), []
-
-    # Creación de la tabla final con las columnas relevantes
-    tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
-        'pts': 'Pts',
-        'name': 'Team',
-        'real_position': 'Pos',
-        'goals': 'GF',
-        'conceded_goals': 'GA',
-        'played': 'M',
-        'wins': 'W',
-        'draws': 'D',
-        'losses': 'L',
-        'goalConDiff': 'GD'
+    df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
+    df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
+    df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
+    df_all['real_position'] = df_all['idx']
+    df_all.sort_values(by=['real_position'],ascending=True,inplace=True)
+    df_all.reset_index(drop=True,inplace=True)
+    df_all['Goals per match'] = [df_all['goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
+    df_all['Goals against per match'] = [df_all['conceded_goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
+    
+    tables = df_all[['real_position','name','played','wins','draws','losses','pts','goals','conceded_goals','goalConDiff','logo']].rename(columns={
+        'pts':'Pts',
+        'name':'Team',
+        'real_position':'Pos',
+        'xg':'xG',
+        'xgConceded':'xGA',
+        'goals':'GF',
+        'conceded_goals':'GA',
+        'played':'M',
+        'wins':'W',
+        'draws':'D',
+        'losses':'L',
+        'goalConDiff':'GD'
     })
-    tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
+    tables[['Pts','GF','GA','Pos','M']] = tables[['Pts','GF','GA','Pos','M']].astype(int)
     logos = tables.logo.tolist()[::-1]
-    tables = tables.iloc[:, :-1]
+    tables = tables.iloc[:,:-1]
     
-    tables.rename(columns={'Pos': ' '}, inplace=True)
+    tables.rename(columns={'Pos':' '},inplace=True)
+    
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
-
-    
-
-
-
-
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
     plt.clf()
@@ -197,10 +158,10 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
 
 
 
-nbi_links = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/NBI_Match_Links.csv")
-lg_lookup = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/PostMatchLeagues.csv")
+nbi_links = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/NBI_Match_Links.csv")
+lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/PostMatchLeagues.csv")
 league_list = lg_lookup.League.tolist()
-lg_lookup = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/PostMatchLeagues.csv")
+lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/PostMatchLeagues.csv")
 lg_id_dict = {lg_lookup.League[i]: lg_lookup.FotMob[i] for i in range(len(lg_lookup))}
 
 
@@ -221,7 +182,7 @@ with st.expander('Disclaimer & Info'):
     - The Expected Points (xPts) model is a Pythagorean expectation model, using the xG output from my xG model. For more info on the method, please read my detailed explainer: https://cafetactiques.com/2023/04/15/creating-an-expected-points-model-inspired-by-pythagorean-expectation/
     ''')
 
-df = pd.read_csv(f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/League_Files/{league.replace(' ','%20')}%20Full%20Match%20List.csv")
+df = pd.read_csv(f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/League_Files/{league.replace(' ','%20')}%20Full%20Match%20List.csv")
 df['Match_Name'] = df['Match'] + ' ' + df['Date']
 
 table_indexdf, table_logos = get_fotmob_table_data(lgg)
@@ -285,14 +246,14 @@ for i in range(len(render_matches)):
             nbi_game_link = nbi_links[nbi_links.MatchName==render_matches[i]]['URL'].values[0]
             with report_tab:
                 st.write(f'Link to Full Match Video (some games may not have been shown on M4Sport and therefore are not available):  \n  \n{render_matches[i][:-11]} -> {nbi_game_link}')
-        url = f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/Image_Files/{league.replace(' ','%20')}/{match_string}.png"
+        url = f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/Image_Files/{league.replace(' ','%20')}/{match_string}.png"
         response = requests.get(url)
         game_image = Image.open(io.BytesIO(response.content))
         report_tab.image(game_image)
     except:
         st.write(f"Apologies, {render_matches[i]} must not be available yet. Please check in later!")
 
-team_data = pd.read_csv(f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/Stat_Files/{league.replace(' ','%20')}.csv")
+team_data = pd.read_csv(f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/Stat_Files/{league.replace(' ','%20')}.csv")
 
 conditions_team = [
     team_data['Goals'] > team_data['Goals Conceded'],
@@ -674,3 +635,4 @@ with st.expander("Game Control, On-Ball Pressure, & Off-Ball Pressure Explainer"
     - Off-ball pressure includes forcing opponents out of the final third, keeping their possession deep, & intercepting passes.  \n
     All on-ball & off-ball actions are weighted differently, and the model has been iteratively tested & tweaked vs my eyes when watching many games across many different style leagues. Your opinion may differe, and that is perfectly fine as no model is perfect, foolproof, or should be taken at face-value. Please understand there are always limits.
     ''')
+
