@@ -44,6 +44,7 @@ def get_fotmob_table_data(lg):
     try:
         # Verificar la estructura y extraer la tabla de datos
         if 'data' in json_data and isinstance(json_data['data'], pd.Series):
+            # Acceso seguro a las claves 'table' y 'all' con manejo de errores
             table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
         else:
             st.error("La estructura del JSON no contiene los datos esperados.")
