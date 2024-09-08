@@ -17,7 +17,7 @@ cxG = 1.53570624482222
 
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
-    lg_id_dict = {'MLS': 130}  # Asegúrate de que el diccionario de IDs de ligas esté configurado correctamente
+    lg_id_dict = {'MLS': 130}  # Asegúrate de que este diccionario incluya las ligas necesarias
 
     # Verificar si la liga está en el diccionario
     if lg not in lg_id_dict:
@@ -36,15 +36,21 @@ def get_fotmob_table_data(lg):
     # Leer la respuesta JSON
     try:
         soup = BeautifulSoup(response.content, "html.parser")
-        json_data = pd.read_json(StringIO(soup.getText()))
+        json_data = pd.read_json(StringIO(soup.get_text()))
     except Exception as e:
         print(f"Error al leer los datos JSON: {e}")
         return pd.DataFrame(), []
 
     # Intentar extraer la tabla de datos del JSON
     try:
-        # Ajusta el acceso a la estructura de los datos según el formato específico del JSON
-        table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
+        # Verificar la estructura y extraer la tabla de datos
+        if 'data' in json_data and isinstance(json_data['data'], pd.Series):
+            table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
+        else:
+            print("La estructura del JSON no contiene los datos esperados.")
+            return pd.DataFrame(), []
+
+        # Normalizar los datos extraídos en un DataFrame
         df = pd.json_normalize(table)
         df = df.T
 
@@ -52,8 +58,9 @@ def get_fotmob_table_data(lg):
         df_all = pd.DataFrame()
         for i in range(len(df)):
             for j in range(len(df.columns)):
-                row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
-                df_all = pd.concat([df_all, row])
+                if isinstance(df.iloc[i, j], dict):
+                    row = pd.DataFrame([df.iloc[i, j]])
+                    df_all = pd.concat([df_all, row])
 
         df_all.reset_index(drop=True, inplace=True)
         df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
@@ -90,6 +97,7 @@ def get_fotmob_table_data(lg):
     except KeyError as e:
         print(f"Error al procesar los datos de la tabla: {e}")
         return pd.DataFrame(), []
+        
         
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
