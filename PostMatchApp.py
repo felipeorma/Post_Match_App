@@ -14,107 +14,70 @@ from io import StringIO
 cxG = 1.53570624482222
 
 @st.cache_data(ttl=60*15)
+
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
-    lg_id_dict = {
-        'MLS': 130,
-        'Premier League': 47,
-        'La Liga': 87,
-        'Serie A': 55,
-        'Bundesliga': 54,
-        'Ligue 1': 53
-    }
-
-    if lg not in lg_id_dict:
-        print(f"Error: La liga {lg} no está definida en el diccionario de IDs.")
-        return pd.DataFrame(), []
-
+    #######################################################
+    
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
-    response = requests.get(url)
+    page = requests.get(url)
+    soup = BeautifulSoup(page.content, "html.parser")
+    json_data = pd.read_json(StringIO(soup.getText()))
+    
+    table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
+    df = pd.json_normalize(table)
+    df = df.T
+    
+    df_all = pd.DataFrame()
+    for i in range(len(df)):
+        for j in range(len(df.columns)):
+            row = pd.DataFrame(pd.Series(df.iloc[i,j])).T
+            df_all = pd.concat([df_all,row])
+    df_all.reset_index(drop=True,inplace=True)
+    
+    df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
+    df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
+    df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
+    df_all['real_position'] = df_all['idx']
+    df_all.sort_values(by=['real_position'],ascending=True,inplace=True)
+    df_all.reset_index(drop=True,inplace=True)
+    df_all['Goals per match'] = [df_all['goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
+    df_all['Goals against per match'] = [df_all['conceded_goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
+    
+    tables = df_all[['real_position','name','played','wins','draws','losses','pts','goals','conceded_goals','goalConDiff','logo']].rename(columns={
+        'pts':'Pts',
+        'name':'Team',
+        'real_position':'Pos',
+        'xg':'xG',
+        'xgConceded':'xGA',
+        'goals':'GF',
+        'conceded_goals':'GA',
+        'played':'M',
+        'wins':'W',
+        'draws':'D',
+        'losses':'L',
+        'goalConDiff':'GD'
+    })
+    tables[['Pts','GF','GA','Pos','M']] = tables[['Pts','GF','GA','Pos','M']].astype(int)
+    logos = tables.logo.tolist()[::-1]
+    tables = tables.iloc[:,:-1]
+    
+    tables.rename(columns={'Pos':' '},inplace=True)
+    
+    indexdf = tables[::-1].copy()
 
-    if response.status_code != 200:
-        print(f"Error al obtener los datos desde FotMob. Código de estado: {response.status_code}")
-        return pd.DataFrame(), []
-
-    try:
-        soup = BeautifulSoup(response.content, "html.parser")
-        json_data = pd.read_json(StringIO(soup.get_text()))
-    except Exception as e:
-        print(f"Error al leer los datos JSON: {e}")
-        return pd.DataFrame(), []
-
-    try:
-        # Asegurar que 'data' existe y es una Serie
-        if 'data' in json_data and isinstance(json_data['data'], pd.Series):
-            # Utilizar get para evitar KeyError si la clave no existe
-            table = json_data['data'].apply(lambda x: x.get('table', {})).apply(lambda x: x.get('all', []))
-        else:
-            print("La estructura del JSON no contiene los datos esperados o 'data' no es una serie.")
-            print(f"Estructura recibida: {json_data.head()}")
-            return pd.DataFrame(), []
-
-        # Normalizar los datos extraídos en un DataFrame
-        df = pd.json_normalize(table)
-        df = df.T
-
-        df_all = pd.DataFrame()
-        for i in range(len(df)):
-            for j in range(len(df.columns)):
-                if isinstance(df.iloc[i, j], dict):
-                    row = pd.DataFrame([df.iloc[i, j]])
-                    df_all = pd.concat([df_all, row])
-
-        df_all.reset_index(drop=True, inplace=True)
-
-        # Verificar si las columnas necesarias existen antes de procesarlas
-        if 'id' in df_all and 'scoresStr' in df_all and 'idx' in df_all:
-            df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
-            df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
-            df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
-            df_all['real_position'] = df_all['idx']
-            df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
-            df_all.reset_index(drop=True, inplace=True)
-            df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-            df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-
-            # Selección de columnas y renombramiento
-            tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
-                'pts': 'Pts',
-                'name': 'Team',
-                'real_position': 'Pos',
-                'goals': 'GF',
-                'conceded_goals': 'GA',
-                'played': 'M',
-                'wins': 'W',
-                'draws': 'D',
-                'losses': 'L',
-                'goalConDiff': 'GD'
-            })
-            tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
-            logos = tables.logo.tolist()[::-1]
-            tables = tables.iloc[:, :-1]
-
-            tables.rename(columns={'Pos': ' '}, inplace=True)
-
-            indexdf = tables[::-1].copy()
-            return indexdf, logos
-        else:
-            print("Las columnas necesarias no se encontraron en los datos.")
-            return pd.DataFrame(), []
-
-    except KeyError as e:
-        print(f"Error al procesar los datos de la tabla: {e}")
-        return pd.DataFrame(), []
+    return indexdf, logos
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
     plt.clf()
-    sns.set(rc={'axes.facecolor': '#fbf9f4', 'figure.facecolor': '#fbf9f4',
-                'ytick.labelcolor': '#4A2E19', 'xtick.labelcolor': '#4A2E19'})
+    sns.set(rc={'axes.facecolor':'#fbf9f4', 'figure.facecolor':'#fbf9f4',
+               'ytick.labelcolor':'#4A2E19', 'xtick.labelcolor':'#4A2E19'})
     
-    fig = plt.figure(figsize=(5, 6), dpi=200)
+    
+    fig = plt.figure(figsize=(5,6), dpi=200)
     ax = plt.subplot()
     
-    ncols = len(indexdf.columns.tolist()) + 1
+    ncols = len(indexdf.columns.tolist())+1
     nrows = indexdf.shape[0]
     
     ax.set_xlim(0, ncols + .5)
@@ -129,7 +92,7 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
             weight = 'regular'
             ax.annotate(
                 xy=(positions[j], i + .5),
-                text=text_label.replace(' U18', ''),
+                text = text_label.replace(' U18',''),
                 ha='left',
                 va='center', color='#4A2E19',
                 weight=weight,
@@ -138,19 +101,19 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
     
     column_names = columns
     for index, c in enumerate(column_names):
-        ax.annotate(
-            xy=(positions[index], nrows + .25),
-            text=column_names[index],
-            ha='left',
-            va='bottom',
-            weight='bold', color='#4A2E19',
-            size=7.5
-        )
+            ax.annotate(
+                xy=(positions[index], nrows + .25),
+                text=column_names[index],
+                ha='left',
+                va='bottom',
+                weight='bold', color='#4A2E19',
+                size=7.5
+            )
     
     ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [nrows, nrows], lw=1.5, color='black', marker='', zorder=4)
     ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [0, 0], lw=1.5, color='black', marker='', zorder=4)
     for x in range(1, nrows):
-        ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [x, x], lw=.5, color='gray', ls=':', zorder=3, marker='')
+        ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [x, x], lw=.5, color='gray', ls=':', zorder=3 , marker='')
     
     ax.set_axis_off()
     
@@ -161,16 +124,19 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
     ax_point_2 = DC_to_NFC([2.75, 0.75])
     ax_width = abs(ax_point_1[0] - ax_point_2[0])
     ax_height = abs(ax_point_1[1] - ax_point_2[1])
+    def ax_logo(link, ax):
+        club_icon = Image.open(urllib.request.urlopen(link))
+        ax.imshow(club_icon)
+        ax.axis('off')
+        return ax
 
-    # Manejar errores de logos
-    if len(logos) != nrows:
-        print(f"Error: La cantidad de logos ({len(logos)}) no coincide con la cantidad de filas ({nrows}).")
-        logos = logos[:nrows]  # Ajustar para evitar errores
-
-    # Mostrar los logos correctamente ajustados
-    for idx, (logo, y) in enumerate(zip(logos, range(nrows))):
-        ax.imshow(plt.imread(logo), extent=[-0.25, 0.75, y - 0.5, y + 0.5], aspect='auto')
-
+    for x in range(0, nrows):
+        ax_coords = DC_to_NFC([0, x + .25])
+        ax = fig.add_axes(
+            [ax_coords[0], ax_coords[1], ax_width, ax_height]
+        )
+        ax_logo(logos[x], ax)
+    
     fig.text(
         x=0.15, y=.91,
         s=f'{lg} Table',
@@ -192,10 +158,10 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
 
 
 
-nbi_links = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/NBI_Match_Links.csv")
-lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/PostMatchLeagues.csv")
+nbi_links = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/NBI_Match_Links.csv")
+lg_lookup = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/PostMatchLeagues.csv")
 league_list = lg_lookup.League.tolist()
-lg_lookup = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/PostMatchLeagues.csv")
+lg_lookup = pd.read_csv("https://raw.githubusercontent.com/griffisben/Post_Match_App/main/PostMatchLeagues.csv")
 lg_id_dict = {lg_lookup.League[i]: lg_lookup.FotMob[i] for i in range(len(lg_lookup))}
 
 
@@ -216,7 +182,7 @@ with st.expander('Disclaimer & Info'):
     - The Expected Points (xPts) model is a Pythagorean expectation model, using the xG output from my xG model. For more info on the method, please read my detailed explainer: https://cafetactiques.com/2023/04/15/creating-an-expected-points-model-inspired-by-pythagorean-expectation/
     ''')
 
-df = pd.read_csv(f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/League_Files/{league.replace(' ','%20')}%20Full%20Match%20List.csv")
+df = pd.read_csv(f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/League_Files/{league.replace(' ','%20')}%20Full%20Match%20List.csv")
 df['Match_Name'] = df['Match'] + ' ' + df['Date']
 
 table_indexdf, table_logos = get_fotmob_table_data(lgg)
@@ -280,14 +246,14 @@ for i in range(len(render_matches)):
             nbi_game_link = nbi_links[nbi_links.MatchName==render_matches[i]]['URL'].values[0]
             with report_tab:
                 st.write(f'Link to Full Match Video (some games may not have been shown on M4Sport and therefore are not available):  \n  \n{render_matches[i][:-11]} -> {nbi_game_link}')
-        url = f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/Image_Files/{league.replace(' ','%20')}/{match_string}.png"
+        url = f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/Image_Files/{league.replace(' ','%20')}/{match_string}.png"
         response = requests.get(url)
         game_image = Image.open(io.BytesIO(response.content))
         report_tab.image(game_image)
     except:
         st.write(f"Apologies, {render_matches[i]} must not be available yet. Please check in later!")
 
-team_data = pd.read_csv(f"https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/Stat_Files/{league.replace(' ','%20')}.csv")
+team_data = pd.read_csv(f"https://raw.githubusercontent.com/griffisben/Post_Match_App/main/Stat_Files/{league.replace(' ','%20')}.csv")
 
 conditions_team = [
     team_data['Goals'] > team_data['Goals Conceded'],
@@ -669,4 +635,3 @@ with st.expander("Game Control, On-Ball Pressure, & Off-Ball Pressure Explainer"
     - Off-ball pressure includes forcing opponents out of the final third, keeping their possession deep, & intercepting passes.  \n
     All on-ball & off-ball actions are weighted differently, and the model has been iteratively tested & tweaked vs my eyes when watching many games across many different style leagues. Your opinion may differe, and that is perfectly fine as no model is perfect, foolproof, or should be taken at face-value. Please understand there are always limits.
     ''')
-
