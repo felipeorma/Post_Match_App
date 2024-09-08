@@ -30,21 +30,34 @@ def get_fotmob_table_data(lg):
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.getText()))
-    
+
+    # Manejo de la estructura del JSON dependiendo de la liga
     if lg == 'MLS':
-        table = json_data['data']['table']  # Ajusta esto según la estructura real
-        df = pd.json_normalize(table)
+        # Ajusta la clave según la estructura real de los datos para MLS
+        if 'data' in json_data and 'table' in json_data['data']:
+            table = json_data['data']['table']
+            df = pd.json_normalize(table)
+        else:
+            raise KeyError("Expected keys not found in JSON for MLS.")
     else:
-        table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
-        df = pd.json_normalize(table)
+        # Manejo genérico para otras ligas
+        if 'data' in json_data and 'tables' in json_data['data']:
+            tables_data = json_data['data']['tables']
+            if isinstance(tables_data, list) and len(tables_data) > 0:
+                table_data = tables_data[0]
+                df = pd.json_normalize(table_data['all'])
+            else:
+                raise KeyError("Expected tables data not found in JSON for other leagues.")
+        else:
+            raise KeyError("Expected keys not found in JSON for other leagues.")
     
     df = df.T
     
     df_all = pd.DataFrame()
     for i in range(len(df)):
         for j in range(len(df.columns)):
-            row = pd.DataFrame(pd.Series(df.iloc[i,j])).T
-            df_all = pd.concat([df_all,row])
+            row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
+            df_all = pd.concat([df_all, row])
     df_all.reset_index(drop=True, inplace=True)
     
     df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
