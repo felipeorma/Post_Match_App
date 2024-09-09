@@ -22,7 +22,7 @@ def get_fotmob_table_data(lg):
     lg_id_dict = {
         'MLS': '130',
         'EPL': '1',
-        'La Liga': '2'
+        'La Liga': '48'
     }
     
     if lg not in lg_id_dict:
