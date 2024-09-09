@@ -89,12 +89,6 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
-
-# Ejemplo de manejo de errores al cargar el CSV
-try:
-    team_data = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/Stat_Files/MLS.csv")
-except HTTPError as e:
-    print(f"HTTPError: Unable to load CSV file - {e}")
     
 
     
