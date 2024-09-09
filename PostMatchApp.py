@@ -15,11 +15,6 @@ cxG = 1.53570624482222
 
 @st.cache_data(ttl=60*15)
 
-import requests
-import pandas as pd
-from bs4 import BeautifulSoup
-from io import StringIO
-
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
     
