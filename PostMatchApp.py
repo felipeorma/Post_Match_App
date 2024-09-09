@@ -33,28 +33,33 @@ def get_fotmob_table_data(lg):
     print("JSON data structure:", json_data.head())
     print("Full JSON data:", json_data.to_dict())
 
-    if lg == 'MLS':
-        try:
-            # Asegúrate de que el JSON devuelto es una lista y toma el primer elemento
-            data = json_data[0] if isinstance(json_data, list) else json_data
-            table = data['data']['table']
-            df = pd.json_normalize(table)
-        except KeyError as e:
-            print("Error details for MLS:", e)
-            print("Available keys in JSON for MLS:", data.keys() if 'data' in data else 'No "data" key found')
-            raise KeyError("Expected keys not found in JSON for MLS.")
-    else:
-        try:
-            tables_data = json_data['data']['tables']
-            if isinstance(tables_data, list) and len(tables_data) > 0:
-                table_data = tables_data[0]  # Ajusta esto según la estructura real
-                df = pd.json_normalize(table_data['all'])
+    try:
+        if lg == 'MLS':
+            # Ajustar la forma de manejar el JSON
+            if isinstance(json_data, dict) and 'data' in json_data:
+                data = json_data['data']
+                if 'table' in data:
+                    table = data['table']
+                    df = pd.json_normalize(table)
+                else:
+                    raise KeyError("The 'table' key is missing in the JSON data for MLS.")
             else:
-                raise KeyError("Expected tables data not found in JSON for other leagues.")
-        except KeyError as e:
-            print("Error details for other leagues:", e)
-            print("Available keys in JSON for other leagues:", json_data['data'].keys() if 'data' in json_data else 'No "data" key found')
-            raise KeyError("Expected keys not found in JSON for other leagues.")
+                raise KeyError("The 'data' key is missing in the JSON data for MLS.")
+        else:
+            # Manejo para otras ligas
+            if isinstance(json_data, dict) and 'data' in json_data:
+                tables_data = json_data['data']['tables']
+                if isinstance(tables_data, list) and len(tables_data) > 0:
+                    table_data = tables_data[0]  # Ajusta esto según la estructura real
+                    df = pd.json_normalize(table_data['all'])
+                else:
+                    raise KeyError("Expected tables data not found in JSON for other leagues.")
+            else:
+                raise KeyError("The 'data' key is missing in the JSON data for other leagues.")
+    except KeyError as e:
+        print("Error details:", e)
+        print("Available keys in JSON:", json_data.keys())
+        raise e
 
     df = df.T
 
