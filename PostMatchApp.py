@@ -21,28 +21,36 @@ def get_fotmob_table_data(lg):
     # Diccionario de IDs de ligas
     lg_id_dict = {
         'MLS': '130',
-        'EPL': '1',  # Ajusta estos valores según sea necesario
+        'EPL': '1',
         'La Liga': '2'
     }
     
     if lg not in lg_id_dict:
         raise ValueError(f"League '{lg}' is not in lg_id_dict.")
-
+    
+    # Petición de datos de la liga seleccionada
     url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
     response = requests.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.get_text()))
-    
-    # Si es MLS, filtrar para la tabla "Supporters Shield"
+
+    # Verificar la estructura para MLS y buscar la tabla 'Supporters' Shield'
     if lg == 'MLS':
-        table_data = next((table['table']['all'] for table in json_data['data']['tables'] if table['leagueName'] == 'Supporters Shield'), None)
+        # Acceso correcto a la tabla de 'Supporters' Shield'
+        tables = json_data.at[0, 'data']['tables']
+        table_data = next(
+            (table['table']['all'] for table in tables if table['leagueName'] == "Supporters' Shield"), 
+            None
+        )
+        
         if table_data is None:
-            raise ValueError("Supporters Shield table not found in MLS data.")
+            raise ValueError("Supporters' Shield table not found in MLS data.")
     else:
         # Para otras ligas
-        table_data = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
-    
-    # Procesar los datos como antes
+        table_data = json_data['data'].apply(lambda x: x['table']['all'])
+        table_data = table_data.explode().tolist()  # Para aplanar y convertir en lista
+
+    # Procesar los datos
     df = pd.json_normalize(table_data)
     df['logo'] = [f"{img_base}/{team['id']}.png" for team in table_data]
     df['goals'] = df['scoresStr'].apply(lambda x: int(x.split("-")[0]))
@@ -73,7 +81,6 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
-
 
     
 
