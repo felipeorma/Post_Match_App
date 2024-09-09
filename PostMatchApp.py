@@ -34,15 +34,18 @@ def get_fotmob_table_data(lg):
     soup = BeautifulSoup(response.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.get_text()))
 
-    # Verificar la estructura para MLS y buscar la tabla 'Supporters' Shield'
+    # Verificar la estructura para MLS y buscar la tabla de la clasificación general
     if lg == 'MLS':
-        # Acceso correcto a la tabla de 'Supporters' Shield'
-        tables = json_data.at[0, 'data']['tables']
-        table_data = next(
-            (table['table']['all'] for table in tables if table['leagueName'] == "Supporters' Shield"), 
-            None
-        )
-        
+        # Buscando la tabla correcta en el JSON
+        try:
+            tables = json_data.at[0, 'data']['tables']
+            table_data = next(
+                (table['table']['all'] for table in tables if table['leagueName'].lower() == "supporters' shield" or "supporters" in table['leagueName'].lower()), 
+                None
+            )
+        except (KeyError, IndexError, TypeError) as e:
+            raise ValueError(f"Error accessing the Supporters' Shield table in MLS data: {str(e)}")
+
         if table_data is None:
             raise ValueError("Supporters' Shield table not found in MLS data.")
     else:
@@ -50,7 +53,7 @@ def get_fotmob_table_data(lg):
         table_data = json_data['data'].apply(lambda x: x['table']['all'])
         table_data = table_data.explode().tolist()  # Para aplanar y convertir en lista
 
-    # Procesar los datos
+    # Procesar los datos de la tabla general
     df = pd.json_normalize(table_data)
     df['logo'] = [f"{img_base}/{team['id']}.png" for team in table_data]
     df['goals'] = df['scoresStr'].apply(lambda x: int(x.split("-")[0]))
@@ -81,6 +84,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
+    
 
     
 
