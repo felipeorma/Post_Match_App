@@ -32,10 +32,16 @@ def get_fotmob_table_data(lg):
     league_id = lg_id_dict[lg]
     url = f"https://www.fotmob.com/api/tltable?leagueId={league_id}"
     
-    # Obtención y análisis del contenido de la página
-    page = requests.get(url)
-    soup = BeautifulSoup(page.content, "html.parser")
-    json_data = pd.read_json(StringIO(soup.get_text()))
+    # Obtención del contenido JSON
+    response = requests.get(url)
+    
+    if response.status_code != 200:
+        raise ValueError(f"Failed to fetch data. Status code: {response.status_code}")
+    
+    try:
+        json_data = response.json()
+    except ValueError as e:
+        raise ValueError(f"Failed to decode JSON: {e}")
     
     # Imprime el contenido del JSON para depuración
     print("JSON Data:", json_data)
