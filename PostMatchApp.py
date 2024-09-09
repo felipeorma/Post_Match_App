@@ -22,7 +22,7 @@ def get_fotmob_table_data(lg):
     lg_id_dict = {
         'MLS': '130',
         'EPL': '1',
-        'La Liga': '48'
+        'La Liga': '2'
     }
     
     if lg not in lg_id_dict:
@@ -40,22 +40,27 @@ def get_fotmob_table_data(lg):
         try:
             tables = json_data.at[0, 'data']['tables']
             table_data = next(
-                (table['table']['all'] for table in tables if table['leagueName'].lower() == "supporters' shield" or "supporters" in table['leagueName'].lower()), 
+                (table['table']['all'] for table in tables if table['leagueId'] == 9999 and table['leagueName'] == "Supporters Shield"), 
                 None
             )
         except (KeyError, IndexError, TypeError) as e:
-            raise ValueError(f"Error accessing the Supporters' Shield table in MLS data: {str(e)}")
+            raise ValueError(f"Error accessing the Supporters Shield table in MLS data: {str(e)}")
 
         if table_data is None:
-            raise ValueError("Supporters' Shield table not found in MLS data.")
+            raise ValueError("Supporters Shield table not found in MLS data.")
     else:
         # Para otras ligas
         table_data = json_data['data'].apply(lambda x: x['table']['all'])
         table_data = table_data.explode().tolist()  # Para aplanar y convertir en lista
 
     # Procesar los datos de la tabla general
-    df = pd.json_normalize(table_data)
-    df['logo'] = [f"{img_base}/{team['id']}.png" for team in table_data]
+    try:
+        df = pd.json_normalize(table_data)
+        df['logo'] = [f"{img_base}/{team['id']}.png" for team in table_data]
+    except KeyError as e:
+        raise ValueError(f"KeyError when processing data: {str(e)}")
+
+    # Continuar con el procesamiento
     df['goals'] = df['scoresStr'].apply(lambda x: int(x.split("-")[0]))
     df['conceded_goals'] = df['scoresStr'].apply(lambda x: int(x.split("-")[1]))
     df['real_position'] = df['idx']
@@ -84,6 +89,12 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
 
     return indexdf, logos
+
+# Ejemplo de manejo de errores al cargar el CSV
+try:
+    team_data = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/Stat_Files/MLS.csv")
+except HTTPError as e:
+    print(f"HTTPError: Unable to load CSV file - {e}")
     
 
     
