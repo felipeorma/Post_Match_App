@@ -28,24 +28,30 @@ def get_fotmob_table_data(lg):
     
     if lg not in lg_id_dict:
         raise ValueError(f"League '{lg}' is not in lg_id_dict.")
-
-    url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
+    
+    league_id = lg_id_dict[lg]
+    url = f"https://www.fotmob.com/api/tltable?leagueId={league_id}"
+    
+    # Obtención y análisis del contenido de la página
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.get_text()))
+    
+    # Imprime el contenido del JSON para depuración
+    print("JSON Data:", json_data)
 
     # Manejo específico para MLS
     if lg == 'MLS':
         try:
             data = json_data['data']['tables'][0]['table']['all']
-        except KeyError:
-            raise ValueError("Unexpected structure for MLS data")
+        except KeyError as e:
+            raise ValueError(f"Unexpected structure for MLS data: {e}")
     else:
         # Para otras ligas
         try:
             data = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
-        except KeyError:
-            raise ValueError("Unexpected structure for league data")
+        except KeyError as e:
+            raise ValueError(f"Unexpected structure for league data: {e}")
     
     # Procesar datos
     df = pd.json_normalize(data)
