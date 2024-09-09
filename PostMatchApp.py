@@ -17,80 +17,52 @@ cxG = 1.53570624482222
 
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
+    #######################################################
     
-    # Diccionario de IDs de ligas
-    lg_id_dict = {
-        'MLS': '130',
-        'EPL': '1',
-        'La Liga': '48'
-        # Añade más ligas si es necesario
-    }
+    url = f"https://www.fotmob.com/api/tltable?leagueId={lg_id_dict[lg]}"
+    page = requests.get(url)
+    soup = BeautifulSoup(page.content, "html.parser")
+    json_data = pd.read_json(StringIO(soup.getText()))
     
-    if lg not in lg_id_dict:
-        raise ValueError(f"League '{lg}' is not in lg_id_dict.")
+    table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
+    df = pd.json_normalize(table)
+    df = df.T
     
-    league_id = lg_id_dict[lg]
-    url = f"https://www.fotmob.com/api/tltable?leagueId={league_id}"
+    df_all = pd.DataFrame()
+    for i in range(len(df)):
+        for j in range(len(df.columns)):
+            row = pd.DataFrame(pd.Series(df.iloc[i,j])).T
+            df_all = pd.concat([df_all,row])
+    df_all.reset_index(drop=True,inplace=True)
     
-    # Obtención del contenido JSON
-    response = requests.get(url)
+    df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
+    df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
+    df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
+    df_all['real_position'] = df_all['idx']
+    df_all.sort_values(by=['real_position'],ascending=True,inplace=True)
+    df_all.reset_index(drop=True,inplace=True)
+    df_all['Goals per match'] = [df_all['goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
+    df_all['Goals against per match'] = [df_all['conceded_goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
     
-    if response.status_code != 200:
-        raise ValueError(f"Failed to fetch data. Status code: {response.status_code}")
-    
-    try:
-        json_data = response.json()
-    except ValueError as e:
-        raise ValueError(f"Failed to decode JSON: {e}")
-
-    # Imprime el contenido del JSON para depuración
-    print("JSON Data:", json_data)
-
-    try:
-        # Accede a los datos de la tabla
-        if lg == 'MLS':
-            data = json_data.get('data', {}).get('tables', [{}])[0].get('table', {}).get('all', [])
-        else:
-            # Maneja otros casos
-            tables = json_data.get('data', [])
-            if tables:
-                data = tables[0].get('table', {}).get('all', [])
-            else:
-                data = []
-    except KeyError as e:
-        raise ValueError(f"Unexpected structure in JSON: {e}")
-
-    # Procesar datos
-    if not data:
-        raise ValueError("No data found in JSON response.")
-
-    df = pd.json_normalize(data)
-    df['logo'] = [f"{img_base}/{df['id'][i]}.png" for i in range(len(df))]
-    df['goals'] = [int(df['scoresStr'][i].split("-")[0]) for i in range(len(df))]
-    df['conceded_goals'] = [int(df['scoresStr'][i].split("-")[1]) for i in range(len(df))]
-    df['real_position'] = df['idx']
-    df.sort_values(by=['real_position'], ascending=True, inplace=True)
-    df.reset_index(drop=True, inplace=True)
-    df['Goals per match'] = [df['goals'][i] / df['played'][i] if df['played'][i] > 0 else 0 for i in range(len(df))]
-    df['Goals against per match'] = [df['conceded_goals'][i] / df['played'][i] if df['played'][i] > 0 else 0 for i in range(len(df))]
-    
-    tables = df[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
-        'pts': 'Pts',
-        'name': 'Team',
-        'real_position': 'Pos',
-        'goals': 'GF',
-        'conceded_goals': 'GA',
-        'played': 'M',
-        'wins': 'W',
-        'draws': 'D',
-        'losses': 'L',
-        'goalConDiff': 'GD'
+    tables = df_all[['real_position','name','played','wins','draws','losses','pts','goals','conceded_goals','goalConDiff','logo']].rename(columns={
+        'pts':'Pts',
+        'name':'Team',
+        'real_position':'Pos',
+        'xg':'xG',
+        'xgConceded':'xGA',
+        'goals':'GF',
+        'conceded_goals':'GA',
+        'played':'M',
+        'wins':'W',
+        'draws':'D',
+        'losses':'L',
+        'goalConDiff':'GD'
     })
-    tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
+    tables[['Pts','GF','GA','Pos','M']] = tables[['Pts','GF','GA','Pos','M']].astype(int)
     logos = tables.logo.tolist()[::-1]
-    tables = tables.iloc[:, :-1]
+    tables = tables.iloc[:,:-1]
     
-    tables.rename(columns={'Pos': ' '}, inplace=True)
+    tables.rename(columns={'Pos':' '},inplace=True)
     
     indexdf = tables[::-1].copy()
 
