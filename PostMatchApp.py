@@ -16,6 +16,11 @@ cxG = 1.53570624482222
 @st.cache_data(ttl=60*15)
 
 
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+from io import StringIO
+
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
     
@@ -34,15 +39,15 @@ def get_fotmob_table_data(lg):
     print("JSON data structure:", json_data.head())
     print("Full JSON data:", json_data.to_dict())
 
-    # Manejo de la estructura del JSON dependiendo de la liga
     if lg == 'MLS':
         try:
-            data = json_data[0]  # JSON data is a list of dicts
+            # Asegúrate de que el JSON devuelto es una lista y toma el primer elemento
+            data = json_data[0] if isinstance(json_data, list) else json_data
             table = data['data']['table']
             df = pd.json_normalize(table)
         except KeyError as e:
             print("Error details for MLS:", e)
-            print("Available keys in JSON for MLS:", data.keys())
+            print("Available keys in JSON for MLS:", data.keys() if 'data' in data else 'No "data" key found')
             raise KeyError("Expected keys not found in JSON for MLS.")
     else:
         try:
@@ -54,7 +59,7 @@ def get_fotmob_table_data(lg):
                 raise KeyError("Expected tables data not found in JSON for other leagues.")
         except KeyError as e:
             print("Error details for other leagues:", e)
-            print("Available keys in JSON for other leagues:", json_data['data'].keys())
+            print("Available keys in JSON for other leagues:", json_data['data'].keys() if 'data' in json_data else 'No "data" key found')
             raise KeyError("Expected keys not found in JSON for other leagues.")
 
     df = df.T
@@ -98,6 +103,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
     
     return indexdf, logos
+
     
 
 
