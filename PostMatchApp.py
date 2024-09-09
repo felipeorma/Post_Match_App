@@ -42,24 +42,28 @@ def get_fotmob_table_data(lg):
         json_data = response.json()
     except ValueError as e:
         raise ValueError(f"Failed to decode JSON: {e}")
-    
+
     # Imprime el contenido del JSON para depuración
     print("JSON Data:", json_data)
 
-    # Manejo específico para MLS
-    if lg == 'MLS':
-        try:
-            data = json_data['data']['tables'][0]['table']['all']
-        except KeyError as e:
-            raise ValueError(f"Unexpected structure for MLS data: {e}")
-    else:
-        # Para otras ligas
-        try:
-            data = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
-        except KeyError as e:
-            raise ValueError(f"Unexpected structure for league data: {e}")
-    
+    try:
+        # Accede a los datos de la tabla
+        if lg == 'MLS':
+            data = json_data.get('data', {}).get('tables', [{}])[0].get('table', {}).get('all', [])
+        else:
+            # Maneja otros casos
+            tables = json_data.get('data', [])
+            if tables:
+                data = tables[0].get('table', {}).get('all', [])
+            else:
+                data = []
+    except KeyError as e:
+        raise ValueError(f"Unexpected structure in JSON: {e}")
+
     # Procesar datos
+    if not data:
+        raise ValueError("No data found in JSON response.")
+
     df = pd.json_normalize(data)
     df['logo'] = [f"{img_base}/{df['id'][i]}.png" for i in range(len(df))]
     df['goals'] = [int(df['scoresStr'][i].split("-")[0]) for i in range(len(df))]
