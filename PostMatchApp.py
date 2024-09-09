@@ -16,7 +16,6 @@ cxG = 1.53570624482222
 @st.cache_data(ttl=60*15)
 
 
-
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
     
@@ -38,11 +37,12 @@ def get_fotmob_table_data(lg):
     # Manejo de la estructura del JSON dependiendo de la liga
     if lg == 'MLS':
         try:
-            # Ajustar el acceso a los datos según la estructura del JSON
             data = json_data[0]  # JSON data is a list of dicts
             table = data['data']['table']
             df = pd.json_normalize(table)
-        except KeyError:
+        except KeyError as e:
+            print("Error details for MLS:", e)
+            print("Available keys in JSON for MLS:", data.keys())
             raise KeyError("Expected keys not found in JSON for MLS.")
     else:
         try:
@@ -52,7 +52,9 @@ def get_fotmob_table_data(lg):
                 df = pd.json_normalize(table_data['all'])
             else:
                 raise KeyError("Expected tables data not found in JSON for other leagues.")
-        except KeyError:
+        except KeyError as e:
+            print("Error details for other leagues:", e)
+            print("Available keys in JSON for other leagues:", json_data['data'].keys())
             raise KeyError("Expected keys not found in JSON for other leagues.")
 
     df = df.T
@@ -96,6 +98,7 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
     
     return indexdf, logos
+    
 
 
 
