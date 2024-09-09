@@ -33,17 +33,22 @@ def get_fotmob_table_data(lg):
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.get_text()))
-    
+
     # Manejo específico para MLS
     if lg == 'MLS':
-        data = json_data['data']['tables'][0]['table']['all']
+        try:
+            data = json_data['data']['tables'][0]['table']['all']
+        except KeyError:
+            raise ValueError("Unexpected structure for MLS data")
     else:
         # Para otras ligas
-        data = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
-    
-    df = pd.json_normalize(data)
+        try:
+            data = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
+        except KeyError:
+            raise ValueError("Unexpected structure for league data")
     
     # Procesar datos
+    df = pd.json_normalize(data)
     df['logo'] = [f"{img_base}/{df['id'][i]}.png" for i in range(len(df))]
     df['goals'] = [int(df['scoresStr'][i].split("-")[0]) for i in range(len(df))]
     df['conceded_goals'] = [int(df['scoresStr'][i].split("-")[1]) for i in range(len(df))]
