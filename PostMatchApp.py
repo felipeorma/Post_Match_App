@@ -18,9 +18,6 @@ cxG = 1.53570624482222
 def get_fotmob_table_data(lg):
     img_base = "https://images.fotmob.com/image_resources/logo/teamlogo"
     
-    # Asegúrate de que lg_id_dict está definido en el mismo contexto
-    global lg_id_dict
-    
     if lg not in lg_id_dict:
         raise ValueError(f"League '{lg}' is not in the lg_id_dict.")
 
@@ -28,79 +25,49 @@ def get_fotmob_table_data(lg):
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "html.parser")
     json_data = pd.read_json(StringIO(soup.getText()))
-
-    # Depuración: Imprimir la estructura del JSON
-    print("JSON data structure:", json_data.head())
-    print("Full JSON data:", json_data.to_dict())
-
-    try:
-        if lg == 'MLS':
-            # Ajustar la forma de manejar el JSON
-            if isinstance(json_data, dict) and 'data' in json_data:
-                data = json_data['data']
-                if 'table' in data:
-                    table = data['table']
-                    df = pd.json_normalize(table)
-                else:
-                    raise KeyError("The 'table' key is missing in the JSON data for MLS.")
-            else:
-                raise KeyError("The 'data' key is missing in the JSON data for MLS.")
-        else:
-            # Manejo para otras ligas
-            if isinstance(json_data, dict) and 'data' in json_data:
-                tables_data = json_data['data']['tables']
-                if isinstance(tables_data, list) and len(tables_data) > 0:
-                    table_data = tables_data[0]  # Ajusta esto según la estructura real
-                    df = pd.json_normalize(table_data['all'])
-                else:
-                    raise KeyError("Expected tables data not found in JSON for other leagues.")
-            else:
-                raise KeyError("The 'data' key is missing in the JSON data for other leagues.")
-    except KeyError as e:
-        print("Error details:", e)
-        print("Available keys in JSON:", json_data.keys())
-        raise e
-
+    
+    table = json_data['data'].apply(lambda x: x['table']).apply(lambda x: x['all'])
+    df = pd.json_normalize(table)
     df = df.T
-
+    
     df_all = pd.DataFrame()
     for i in range(len(df)):
         for j in range(len(df.columns)):
-            row = pd.DataFrame(pd.Series(df.iloc[i, j])).T
-            df_all = pd.concat([df_all, row])
-    df_all.reset_index(drop=True, inplace=True)
+            row = pd.DataFrame(pd.Series(df.iloc[i,j])).T
+            df_all = pd.concat([df_all,row])
+    df_all.reset_index(drop=True,inplace=True)
     
     df_all['logo'] = [f"{img_base}/{df_all['id'][i]}.png" for i in range(len(df_all))]
     df_all['goals'] = [int(df_all['scoresStr'][i].split("-")[0]) for i in range(len(df_all))]
     df_all['conceded_goals'] = [int(df_all['scoresStr'][i].split("-")[1]) for i in range(len(df_all))]
     df_all['real_position'] = df_all['idx']
-    df_all.sort_values(by=['real_position'], ascending=True, inplace=True)
-    df_all.reset_index(drop=True, inplace=True)
-    df_all['Goals per match'] = [df_all['goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
-    df_all['Goals against per match'] = [df_all['conceded_goals'][i] / df_all['played'][i] if df_all.played[i] > 0 else 0 for i in range(len(df_all))]
+    df_all.sort_values(by=['real_position'],ascending=True,inplace=True)
+    df_all.reset_index(drop=True,inplace=True)
+    df_all['Goals per match'] = [df_all['goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
+    df_all['Goals against per match'] = [df_all['conceded_goals'][i]/df_all['played'][i] if df_all.played[i]>0 else 0 for i in range(len(df_all))]
     
-    tables = df_all[['real_position', 'name', 'played', 'wins', 'draws', 'losses', 'pts', 'goals', 'conceded_goals', 'goalConDiff', 'logo']].rename(columns={
-        'pts': 'Pts',
-        'name': 'Team',
-        'real_position': 'Pos',
-        'xg': 'xG',
-        'xgConceded': 'xGA',
-        'goals': 'GF',
-        'conceded_goals': 'GA',
-        'played': 'M',
-        'wins': 'W',
-        'draws': 'D',
-        'losses': 'L',
-        'goalConDiff': 'GD'
+    tables = df_all[['real_position','name','played','wins','draws','losses','pts','goals','conceded_goals','goalConDiff','logo']].rename(columns={
+        'pts':'Pts',
+        'name':'Team',
+        'real_position':'Pos',
+        'xg':'xG',
+        'xgConceded':'xGA',
+        'goals':'GF',
+        'conceded_goals':'GA',
+        'played':'M',
+        'wins':'W',
+        'draws':'D',
+        'losses':'L',
+        'goalConDiff':'GD'
     })
-    tables[['Pts', 'GF', 'GA', 'Pos', 'M']] = tables[['Pts', 'GF', 'GA', 'Pos', 'M']].astype(int)
+    tables[['Pts','GF','GA','Pos','M']] = tables[['Pts','GF','GA','Pos','M']].astype(int)
     logos = tables.logo.tolist()[::-1]
-    tables = tables.iloc[:, :-1]
+    tables = tables.iloc[:,:-1]
     
-    tables.rename(columns={'Pos': ' '}, inplace=True)
+    tables.rename(columns={'Pos':' '},inplace=True)
     
     indexdf = tables[::-1].copy()
-    
+
     return indexdf, logos
 
     
@@ -109,13 +76,14 @@ def get_fotmob_table_data(lg):
 
 def create_fotmob_table_img(lg, date, indexdf, logos):
     plt.clf()
-    sns.set(rc={'axes.facecolor': '#fbf9f4', 'figure.facecolor': '#fbf9f4',
-               'ytick.labelcolor': '#4A2E19', 'xtick.labelcolor': '#4A2E19'})
+    sns.set(rc={'axes.facecolor':'#fbf9f4', 'figure.facecolor':'#fbf9f4',
+               'ytick.labelcolor':'#4A2E19', 'xtick.labelcolor':'#4A2E19'})
     
-    fig = plt.figure(figsize=(5, 6), dpi=200)
+    
+    fig = plt.figure(figsize=(5,6), dpi=200)
     ax = plt.subplot()
     
-    ncols = len(indexdf.columns.tolist()) + 1
+    ncols = len(indexdf.columns.tolist())+1
     nrows = indexdf.shape[0]
     
     ax.set_xlim(0, ncols + .5)
@@ -130,7 +98,7 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
             weight = 'regular'
             ax.annotate(
                 xy=(positions[j], i + .5),
-                text=text_label.replace(' U18', ''),
+                text = text_label.replace(' U18',''),
                 ha='left',
                 va='center', color='#4A2E19',
                 weight=weight,
@@ -139,19 +107,19 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
     
     column_names = columns
     for index, c in enumerate(column_names):
-        ax.annotate(
-            xy=(positions[index], nrows + .25),
-            text=column_names[index],
-            ha='left',
-            va='bottom',
-            weight='bold', color='#4A2E19',
-            size=7.5
-        )
+            ax.annotate(
+                xy=(positions[index], nrows + .25),
+                text=column_names[index],
+                ha='left',
+                va='bottom',
+                weight='bold', color='#4A2E19',
+                size=7.5
+            )
     
     ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [nrows, nrows], lw=1.5, color='black', marker='', zorder=4)
     ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [0, 0], lw=1.5, color='black', marker='', zorder=4)
     for x in range(1, nrows):
-        ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [x, x], lw=.5, color='gray', ls=':', zorder=3, marker='')
+        ax.plot([ax.get_xlim()[0], ax.get_xlim()[1]], [x, x], lw=.5, color='gray', ls=':', zorder=3 , marker='')
     
     ax.set_axis_off()
     
@@ -193,7 +161,6 @@ def create_fotmob_table_img(lg, date, indexdf, logos):
     )
 
     return fig
-
 
 
 nbi_links = pd.read_csv("https://raw.githubusercontent.com/felipeorma/Post_Match_App/main/NBI_Match_Links.csv")
