@@ -38,7 +38,9 @@ def get_fotmob_table_data(lg):
     # Manejo de la estructura del JSON dependiendo de la liga
     if lg == 'MLS':
         try:
-            table = json_data['data']['table']
+            # Ajustar el acceso a los datos según la estructura del JSON
+            data = json_data[0]  # JSON data is a list of dicts
+            table = data['data']['table']
             df = pd.json_normalize(table)
         except KeyError:
             raise KeyError("Expected keys not found in JSON for MLS.")
@@ -94,7 +96,6 @@ def get_fotmob_table_data(lg):
     indexdf = tables[::-1].copy()
     
     return indexdf, logos
-    
 
 
 
